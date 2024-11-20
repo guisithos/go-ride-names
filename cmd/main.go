@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/service"
@@ -48,7 +50,7 @@ func main() {
 		cfg.StravaClientSecret,
 	)
 
-	// Initialize activity service
+	// Initialize service
 	activityService := service.NewActivityService(stravaClient)
 
 	// Get authenticated athlete
@@ -59,20 +61,22 @@ func main() {
 
 	log.Printf("Successfully authenticated as athlete: %s %s", athlete.FirstName, athlete.LastName)
 
-	// Search for Night Swim activities
-	activities, err := activityService.FindNightSwimActivities()
+	// Get activities for the last 30 days
+	now := time.Now().Unix()
+	thirtyDaysAgo := now - (30 * 24 * 60 * 60)
+
+	activities, err := activityService.ListActivities(1, 30, now, thirtyDaysAgo, true)
 	if err != nil {
 		log.Fatalf("Error getting activities: %v", err)
 	}
 
-	if len(activities) == 0 {
-		log.Println("No 'Night Swim' activities found")
-	} else {
-		log.Printf("Found %d 'Night Swim' activities:", len(activities))
-		for _, activity := range activities {
-			log.Printf("- Activity ID: %d, Date: %s",
-				activity.ID,
-				activity.StartDateLocal.Format("2006-01-02 15:04:05"))
-		}
+	// Print activities
+	fmt.Printf("Found %d activities:\n", len(activities))
+	for _, activity := range activities {
+		fmt.Printf("- %s (%.2f km) on %s\n",
+			activity.Name,
+			activity.Distance/1000, // Convert meters to kilometers
+			activity.StartDateLocal.Format("2006-01-02 15:04:05"),
+		)
 	}
 }
