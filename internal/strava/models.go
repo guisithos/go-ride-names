@@ -16,6 +16,7 @@ type Activity struct {
 	Distance       float64   `json:"distance"`
 	MovingTime     int       `json:"moving_time"`
 	Type           string    `json:"type"`
+	SportType      string    `json:"sport_type"`
 	StartDate      time.Time `json:"start_date"`
 	StartDateLocal time.Time `json:"start_date_local"`
 }

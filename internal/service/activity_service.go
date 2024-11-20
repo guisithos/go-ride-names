@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/guisithos/go-ride-names/internal/strava"
@@ -25,6 +24,7 @@ var defaultActivityNames = map[string]bool{
 	"Night Walk":                true,
 	"Morning Weight Training":   true,
 	"Afternoon Weight Training": true,
+	"Lunch Weight Training":     true,
 	"Evening Weight Training":   true,
 	"Night Weight Training":     true,
 	"Morning Swim":              true,
@@ -74,12 +74,15 @@ func (s *ActivityService) UpdateActivityWithFunName(activity *strava.Activity) e
 		return nil // Not a default name, no need to update
 	}
 
-	// Get activity type and corresponding joke
-	activityType := getActivityType(activity.Name)
+	// Get activity type using both name and sport_type
+	activityType := getActivityType(activity.Name, activity.SportType)
 	joke := getRandomJoke(activityType)
 
 	// Log the name change
-	fmt.Printf("Updating activity name:\n  From: %s\n  To:   %s\n\n", activity.Name, joke)
+	fmt.Printf("Updating activity name:\n  From: %s\n  Type: %s\n  To:   %s\n\n",
+		activity.Name,
+		activityType,
+		joke)
 
 	// Update the activity name
 	if err := s.client.UpdateActivity(activity.ID, joke); err != nil {
@@ -91,33 +94,13 @@ func (s *ActivityService) UpdateActivityWithFunName(activity *strava.Activity) e
 	return nil
 }
 
-func getActivityType(activityName string) string {
-	switch {
-	case strings.Contains(activityName, "Run"):
-		return Run
-	case strings.Contains(activityName, "Ride"):
-		return Ride
-	case strings.Contains(activityName, "Swim"):
-		return Swim
-	case strings.Contains(activityName, "Walk"):
-		return Walk
-	case strings.Contains(activityName, "Weight Training"):
-		return Workout
-	case strings.Contains(activityName, "Yoga"):
-		return Yoga
-	default:
-		return Default
-	}
-}
+// Create a package-level random number generator
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func getRandomJoke(activityType string) string {
 	jokes, exists := activityJokes[activityType]
 	if !exists || len(jokes) == 0 {
 		jokes = activityJokes[Default]
 	}
-	return jokes[rand.Intn(len(jokes))]
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
+	return jokes[rng.Intn(len(jokes))]
 }
