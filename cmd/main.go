@@ -34,6 +34,7 @@ func main() {
 		mux,
 		middleware.Recovery,
 		middleware.Logger,
+		middleware.Health("1.0.0", "development"),
 		middleware.CORS(middleware.CORSConfig{
 			AllowedOrigins: cfg.CORS.AllowedOrigins,
 			AllowedMethods: cfg.CORS.AllowedMethods,
