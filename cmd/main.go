@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -20,7 +21,7 @@ func main() {
 	sessions := auth.NewSessionStore()
 	mux := http.NewServeMux()
 
-	// Setup OAuth handler
+	// Setup OAuth handler with configured redirect URI
 	oauthHandler := auth.NewOAuthHandler(cfg, sessions)
 	oauthHandler.RegisterRoutes(mux)
 
@@ -28,14 +29,19 @@ func main() {
 	webHandler := handlers.NewWebHandler(sessions, oauthHandler.GetConfig(), cfg)
 	webHandler.RegisterRoutes(mux)
 
-	// Apply middleware chain
+	// Apply middleware chain with configured CORS
 	handler := middleware.Chain(
 		mux,
 		middleware.Recovery,
 		middleware.Logger,
-		middleware.CORS,
+		middleware.CORS(middleware.CORSConfig{
+			AllowedOrigins: cfg.CORS.AllowedOrigins,
+			AllowedMethods: cfg.CORS.AllowedMethods,
+			AllowedHeaders: cfg.CORS.AllowedHeaders,
+		}),
 	)
 
-	log.Println("Server starting on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	serverAddr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
+	log.Printf("Server starting on http://%s", serverAddr)
+	log.Fatal(http.ListenAndServe(serverAddr, handler))
 }
