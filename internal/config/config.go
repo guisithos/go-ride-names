@@ -14,11 +14,19 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
-	// Load .env file if it exists
-	if err := godotenv.Load(); err != nil {
-		// We'll just log this as a warning since .env is optional
-		fmt.Printf("Warning: .env file not found: %v\n", err)
+	// Print current working directory
+	if dir, err := os.Getwd(); err == nil {
+		fmt.Printf("Current working directory: %s\n", dir)
 	}
+
+	// Look for .env in project root (one level up from cmd)
+	if err := godotenv.Load("../.env"); err != nil {
+		fmt.Printf("Warning: Error loading .env file: %v\n", err)
+	}
+
+	// Print environment variables for debugging
+	fmt.Printf("STRAVA_CLIENT_ID: '%s'\n", os.Getenv("STRAVA_CLIENT_ID"))
+	fmt.Printf("STRAVA_CLIENT_SECRET: '%s'\n", os.Getenv("STRAVA_CLIENT_SECRET"))
 
 	config := &Config{
 		StravaClientID:     os.Getenv("STRAVA_CLIENT_ID"),
