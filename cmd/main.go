@@ -7,6 +7,7 @@ import (
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/handlers"
+	"github.com/guisithos/go-ride-names/internal/middleware"
 )
 
 func main() {
@@ -27,6 +28,14 @@ func main() {
 	webHandler := handlers.NewWebHandler(sessions, oauthHandler.GetConfig(), cfg)
 	webHandler.RegisterRoutes(mux)
 
+	// Apply middleware chain
+	handler := middleware.Chain(
+		mux,
+		middleware.Recovery,
+		middleware.Logger,
+		middleware.CORS,
+	)
+
 	log.Println("Server starting on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
