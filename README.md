@@ -1,8 +1,8 @@
-# Go Ride Names 🚴‍♂️
+# Go Ride Names 🚴
 
 A fun web app that automatically renames your Strava activities with witty jokes!
 
-## Usage 🚀
+## Usage 
 
 1. Visit http://localhost:8080
 2. Click "Connect with Strava"
