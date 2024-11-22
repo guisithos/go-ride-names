@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
+
+	"github.com/guisithos/go-ride-names/internal/config"
 )
 
 const (
@@ -25,61 +28,75 @@ type TokenResponse struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
-func StartOAuthFlow(clientID, clientSecret string) {
-	config := &OAuth2Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		RedirectURI:  "http://localhost:8080/callback",
+type SessionStore struct {
+	sync.RWMutex
+	tokens map[string]*TokenResponse
+}
+
+func NewSessionStore() *SessionStore {
+	return &SessionStore{
+		tokens: make(map[string]*TokenResponse),
+	}
+}
+
+func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
+	s.RLock()
+	defer s.RUnlock()
+	tokens, exists := s.tokens[userID]
+	return tokens, exists
+}
+
+func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) {
+	s.Lock()
+	defer s.Unlock()
+	s.tokens[userID] = tokens
+}
+
+type OAuthHandler struct {
+	config   *OAuth2Config
+	sessions *SessionStore
+}
+
+func NewOAuthHandler(cfg *config.Config, sessions *SessionStore) *OAuthHandler {
+	return &OAuthHandler{
+		config: &OAuth2Config{
+			ClientID:     cfg.StravaClientID,
+			ClientSecret: cfg.StravaClientSecret,
+			RedirectURI:  "http://localhost:8080/callback",
+		},
+		sessions: sessions,
+	}
+}
+
+func (h *OAuthHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/auth", h.handleAuth)
+	mux.HandleFunc("/callback", h.handleCallback)
+}
+
+func (h *OAuthHandler) handleAuth(w http.ResponseWriter, r *http.Request) {
+	authURL := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&response_type=code&scope=read,read_all,profile:read_all,activity:read_all,activity:write&approval_prompt=force",
+		AuthURL,
+		h.config.ClientID,
+		url.QueryEscape(h.config.RedirectURI))
+
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
+}
+
+func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "Code not found", http.StatusBadRequest)
+		return
 	}
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		authURL := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&response_type=code&scope=read,read_all,profile:read_all,activity:read_all,activity:write&approval_prompt=force",
-			AuthURL,
-			config.ClientID,
-			url.QueryEscape(config.RedirectURI))
+	tokenResp, err := exchangeCodeForToken(code, h.config)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error exchanging code: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-		http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
-	})
-
-	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			http.Error(w, "Code not found", http.StatusBadRequest)
-			return
-		}
-
-		// Exchange code for token
-		tokenResp, err := exchangeCodeForToken(code, config)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error exchanging code: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// Make the response more readable and copyable
-		response := fmt.Sprintf(`
-Successfully authenticated! Add these values to your .env file:
-
-STRAVA_CLIENT_ID=%s
-STRAVA_CLIENT_SECRET=%s
-STRAVA_ACCESS_TOKEN=%s
-STRAVA_REFRESH_TOKEN=%s
-
-Token expires at: %d
-`,
-			config.ClientID,
-			config.ClientSecret,
-			tokenResp.AccessToken,
-			tokenResp.RefreshToken,
-			tokenResp.ExpiresAt,
-		)
-
-		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprint(w, response)
-	})
-
-	fmt.Println("Starting server on :8080")
-	fmt.Println("Please visit http://localhost:8080 to begin OAuth flow")
-	http.ListenAndServe(":8080", nil)
+	h.sessions.SetTokens("user", tokenResp)
+	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
 }
 
 func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, error) {
@@ -101,4 +118,8 @@ func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, er
 	}
 
 	return &tokenResp, nil
+}
+
+func (h *OAuthHandler) GetConfig() *OAuth2Config {
+	return h.config
 }
