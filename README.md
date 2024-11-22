@@ -1,17 +1,20 @@
 # Go Ride Names 🚴
 
-A fun web app that automatically renames your Strava activities with witty jokes!
+Aplicação web que re-nomeia as atividades do Strava com piadas relacionadas ao esporte.
 
-## Usage 
+![Go Ride Names](resources/image.png)
 
-1. Visit http://localhost:8080
-2. Click "Connect with Strava"
-3. Authorize the application
-4. Select activities to rename
-5. Enjoy your witty activity names!
+## Uso
 
-## Running Locally
+1. Acesse http://localhost:8080
+2. Clique em "Conectar com Strava"
+3. Autorize a aplicação
+4. Selecione as atividades para renomear
+5. Aproveite seus novos nomes de atividades!
 
-1. Install dependencies: `go mod tidy`
-2. Run the app: `go run .`
-3. Set your Strava client ID and secret in the `.env` file          
+## Executando Localmente
+
+1. Instale as dependências: `go mod tidy`
+2. Execute a aplicação: `go run .`
+3. Configure seu Strava client ID e secret no arquivo `.env`
+
