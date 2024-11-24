@@ -92,15 +92,18 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 						   text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }
 					.loading { text-align: center; padding: 20px; }
 					.error { color: red; padding: 10px; }
+					.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 				</style>
 			</head>
 			<body>
-				<h1>Your Activities</h1>
+				<div class="header">
+					<h1>Your Activities</h1>
+					<button id="rename" class="btn">Rename Activities</button>
+				</div>
 				<div id="activities">
 					<div class="loading">Loading activities...</div>
 				</div>
-				<button id="rename" class="btn">Rename Activities</button>
-				
+
 				<script>
 					// Function to format date
 					function formatDate(dateStr) {
