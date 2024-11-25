@@ -288,9 +288,6 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-	activityService := service.NewActivityService(client)
-
 	// Get base URL from request or environment
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
@@ -298,13 +295,17 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 	callbackURL := baseURL + "/webhook"
 
-	// Create webhook subscription
+	log.Printf("Using callback URL: %s", callbackURL)
+
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
 		log.Printf("Error: WEBHOOK_VERIFY_TOKEN not configured")
 		http.Error(w, "Webhook verify token not configured", http.StatusInternalServerError)
 		return
 	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	activityService := service.NewActivityService(client)
 
 	err := activityService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {
@@ -314,7 +315,9 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store subscription status in session
-	h.sessions.Set("webhook_active", true)
+	if err := h.sessions.Set("webhook_active", true); err != nil {
+		log.Printf("Error storing webhook status: %v", err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": true})

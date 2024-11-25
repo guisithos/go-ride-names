@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -237,6 +238,8 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 	data.Set("callback_url", callbackURL)
 	data.Set("verify_token", verifyToken)
 
+	log.Printf("Creating webhook subscription with callback URL: %s", callbackURL)
+
 	req, err := http.NewRequest("POST", webhookSubscriptionURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
@@ -251,12 +254,12 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	log.Printf("Strava API response: Status=%d, Body=%s", resp.StatusCode, string(body))
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("failed to create subscription: status=%d, body=%s", resp.StatusCode, string(body))
 	}
 
-	// Try to decode the response
 	var subscription WebhookSubscription
 	if err := json.Unmarshal(body, &subscription); err != nil {
 		return nil, fmt.Errorf("error decoding response: %v, body: %s", err, string(body))

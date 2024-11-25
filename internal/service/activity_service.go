@@ -121,10 +121,15 @@ func (s *ActivityService) ProcessNewActivity(activityID int64) error {
 }
 
 func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {
+	log.Printf("Attempting to subscribe to webhooks with callback URL: %s", callbackURL)
+
 	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {
+		log.Printf("Error creating webhook subscription: %v", err)
 		return err
 	}
+
+	log.Printf("Successfully created webhook subscription: ID=%d", subscription.ID)
 	s.webhookSubscription = subscription
 	return nil
 }
