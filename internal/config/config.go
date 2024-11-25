@@ -53,7 +53,8 @@ func LoadConfig() (*Config, error) {
 	config.CORS.AllowedHeaders = strings.Split(getEnvOrDefault("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"), ",")
 
 	// OAuth config
-	config.OAuth.RedirectURI = getEnvOrDefault("OAUTH_REDIRECT_URI", fmt.Sprintf("http://%s:%s/callback", config.Server.Host, config.Server.Port))
+	defaultRedirectURI := "https://go-ride-names-se2bdxecnq-uc.a.run.app/callback"
+	config.OAuth.RedirectURI = getEnvOrDefault("OAUTH_REDIRECT_URI", defaultRedirectURI)
 
 	// Validate required fields
 	if config.StravaClientID == "" {
