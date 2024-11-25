@@ -28,19 +28,12 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
-	// Print current working directory
-	if dir, err := os.Getwd(); err == nil {
-		fmt.Printf("Current working directory: %s\n", dir)
+	// Remove .env loading in production
+	if os.Getenv("ENVIRONMENT") != "production" {
+		if err := godotenv.Load(); err != nil {
+			fmt.Printf("Warning: Error loading .env file: %v\n", err)
+		}
 	}
-
-	// Look for .env in project root (one level up from cmd)
-	if err := godotenv.Load("../.env"); err != nil {
-		fmt.Printf("Warning: Error loading .env file: %v\n", err)
-	}
-
-	// Print environment variables for debugging
-	fmt.Printf("STRAVA_CLIENT_ID: '%s'\n", os.Getenv("STRAVA_CLIENT_ID"))
-	fmt.Printf("STRAVA_CLIENT_SECRET: '%s'\n", os.Getenv("STRAVA_CLIENT_SECRET"))
 
 	// Add support for Google Cloud's PORT environment variable
 	port := getEnvOrDefault("PORT", "8080")
