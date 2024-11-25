@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -14,12 +13,14 @@ import (
 type SessionStore struct {
 	sync.RWMutex
 	tokens map[string]*TokenResponse
+	values map[string]interface{}
 	redis  *redis.Client
 }
 
 func NewSessionStore(redisURL string) *SessionStore {
 	store := &SessionStore{
 		tokens: make(map[string]*TokenResponse),
+		values: make(map[string]interface{}),
 	}
 
 	if redisURL != "" {
@@ -82,16 +83,6 @@ func (s *SessionStore) Set(key string, value interface{}) error {
 	s.Lock()
 	defer s.Unlock()
 
-	// Store in memory
-	switch v := value.(type) {
-	case *TokenResponse:
-		s.tokens[key] = v
-	case bool:
-		s.tokens[key] = &TokenResponse{} // Store empty token for boolean flags
-	default:
-		return fmt.Errorf("unsupported value type for key %s", key)
-	}
-
 	// Store in Redis if available
 	if s.redis != nil {
 		data, err := json.Marshal(value)
@@ -99,6 +90,13 @@ func (s *SessionStore) Set(key string, value interface{}) error {
 			return err
 		}
 		return s.redis.Set(context.Background(), key, data, 24*time.Hour).Err()
+	}
+
+	// Store in memory based on value type
+	if tokenResp, ok := value.(*TokenResponse); ok {
+		s.tokens[key] = tokenResp
+	} else {
+		s.values[key] = value
 	}
 	return nil
 }
@@ -111,23 +109,23 @@ func (s *SessionStore) Get(key string) interface{} {
 	if s.redis != nil {
 		data, err := s.redis.Get(context.Background(), key).Bytes()
 		if err == nil {
-			// Try to unmarshal as boolean first (for webhook_active)
+			var value interface{}
+			if err := json.Unmarshal(data, &value); err == nil {
+				return value
+			}
+			// Try as boolean
 			var boolValue bool
 			if err := json.Unmarshal(data, &boolValue); err == nil {
 				return boolValue
-			}
-
-			// Try to unmarshal as TokenResponse
-			var tokenValue TokenResponse
-			if err := json.Unmarshal(data, &tokenValue); err == nil {
-				return &tokenValue
 			}
 		}
 	}
 
 	// Fallback to memory
-	if value, exists := s.tokens[key]; exists {
-		return value
+	// First check tokens map
+	if token, exists := s.tokens[key]; exists {
+		return token
 	}
-	return nil
+	// Then check values map
+	return s.values[key]
 }

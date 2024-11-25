@@ -246,6 +246,35 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 							button.textContent = 'Activate Auto-Rename';
 						}
 					});
+
+					// Check subscription status periodically
+					async function checkSubscriptionStatus() {
+						try {
+							const response = await fetch('/subscription-status');
+							const data = await response.json();
+							const status = document.getElementById('subscription-status');
+							const button = document.getElementById('subscribe');
+							
+							if (data.active) {
+								status.className = 'status active';
+								status.textContent = 'Auto-rename is active! New activities will be renamed automatically.';
+								button.style.display = 'none';
+							} else {
+								status.className = 'status inactive';
+								status.textContent = 'Auto-rename is currently inactive';
+								button.style.display = 'inline-block';
+								button.disabled = false;
+								button.textContent = 'Activate Auto-Rename';
+							}
+						} catch (error) {
+							console.error('Error checking subscription status:', error);
+						}
+					}
+
+					// Check status every minute
+					setInterval(checkSubscriptionStatus, 60000);
+					// Initial check
+					checkSubscriptionStatus();
 				</script>
 			</body>
 		</html>
@@ -333,7 +362,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store subscription status in session
+	// Store subscription status in session with longer expiration
 	if err := h.sessions.Set("webhook_active", true); err != nil {
 		log.Printf("Error storing webhook status: %v", err)
 	}
@@ -349,28 +378,36 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check both session and verify actual subscription
-	active := h.sessions.Get("webhook_active") != nil
-
-	if active {
-		// Verify the subscription is still valid
-		tokens, exists := h.sessions.GetTokens("user")
-		if exists {
-			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-			subs, err := client.ListWebhookSubscriptions()
-			if err != nil || len(subs) == 0 {
-				log.Printf("Subscription check failed: %v", err)
-				active = false
-				h.sessions.Set("webhook_active", nil)
-			}
-		} else {
-			active = false
-			h.sessions.Set("webhook_active", nil)
-		}
+	tokens, exists := h.sessions.GetTokens("user")
+	if !exists {
+		log.Printf("No tokens found in session")
+		json.NewEncoder(w).Encode(map[string]bool{"active": false})
+		return
 	}
 
-	log.Printf("Subscription status check - Active: %v", active)
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+	// Check actual subscription status
+	subs, err := client.ListWebhookSubscriptions()
+	if err != nil {
+		log.Printf("Error checking subscriptions: %v", err)
+		json.NewEncoder(w).Encode(map[string]bool{"active": false})
+		return
+	}
+
+	// Check if we have any active subscriptions
+	active := len(subs) > 0
+	if active {
+		// Update session status
+		if err := h.sessions.Set("webhook_active", true); err != nil {
+			log.Printf("Error storing webhook status: %v", err)
+		}
+	} else {
+		h.sessions.Set("webhook_active", nil)
+	}
+
+	log.Printf("Subscription status check - Active: %v, Subscriptions: %d", active, len(subs))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
 }
