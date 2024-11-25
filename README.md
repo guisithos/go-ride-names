@@ -16,5 +16,4 @@ Aplicação web que re-nomeia as atividades do Strava com piadas relacionadas ao
 
 1. Instale as dependências: `go mod tidy`
 2. Execute a aplicação: `go run .`
-3. Configure seu Strava client ID e secret no arquivo `.env`
 
