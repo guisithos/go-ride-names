@@ -9,6 +9,8 @@ import (
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/handlers"
 	"github.com/guisithos/go-ride-names/internal/middleware"
+	"github.com/guisithos/go-ride-names/internal/service"
+	"github.com/guisithos/go-ride-names/internal/strava"
 )
 
 func main() {
@@ -25,9 +27,17 @@ func main() {
 	oauthHandler := auth.NewOAuthHandler(cfg, sessions)
 	oauthHandler.RegisterRoutes(mux)
 
+	// Create a default Strava client (it will be replaced with authenticated client per request)
+	stravaClient := strava.NewClient("", "", cfg.StravaClientID, cfg.StravaClientSecret)
+	activityService := service.NewActivityService(stravaClient)
+
 	// Setup web handler
 	webHandler := handlers.NewWebHandler(sessions, oauthHandler.GetConfig(), cfg)
 	webHandler.RegisterRoutes(mux)
+
+	// Setup webhook handler
+	webhookHandler := handlers.NewWebhookHandler(activityService)
+	webhookHandler.RegisterRoutes(mux)
 
 	// Apply middleware chain with configured CORS
 	handler := middleware.Chain(
