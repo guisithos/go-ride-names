@@ -278,12 +278,14 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 
 func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		log.Printf("Invalid method: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	tokens, exists := h.sessions.GetTokens("user")
 	if !exists {
+		log.Printf("No tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -294,8 +296,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		baseURL = "https://" + r.Host
 	}
 	callbackURL := baseURL + "/webhook"
-
-	log.Printf("Using callback URL: %s", callbackURL)
+	log.Printf("Subscription attempt - Base URL: %s, Callback URL: %s", baseURL, callbackURL)
 
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
@@ -304,6 +305,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Creating Strava client with ID: %s", h.stravaConfig.StravaClientID)
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
@@ -319,6 +321,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
+	log.Printf("Successfully created webhook subscription")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": true})
 }

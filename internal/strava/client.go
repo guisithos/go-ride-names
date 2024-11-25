@@ -238,7 +238,8 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 	data.Set("callback_url", callbackURL)
 	data.Set("verify_token", verifyToken)
 
-	log.Printf("Creating webhook subscription with callback URL: %s", callbackURL)
+	log.Printf("Creating webhook subscription - URL: %s, Client ID: %s, Callback URL: %s",
+		webhookSubscriptionURL, c.clientID, callbackURL)
 
 	req, err := http.NewRequest("POST", webhookSubscriptionURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -246,6 +247,10 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Log request details
+	log.Printf("Request headers: %v", req.Header)
+	log.Printf("Request body: %s", data.Encode())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -265,6 +270,7 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 		return nil, fmt.Errorf("error decoding response: %v, body: %s", err, string(body))
 	}
 
+	log.Printf("Successfully created subscription with ID: %d", subscription.ID)
 	return &subscription, nil
 }
 
