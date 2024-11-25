@@ -291,8 +291,14 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
+	// Get base URL from request or environment
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://" + r.Host
+	}
+	callbackURL := baseURL + "/webhook"
+
 	// Create webhook subscription
-	callbackURL := "https://go-ride-names-se2bdxecnq-uc.a.run.app/webhook"
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
 		log.Printf("Error: WEBHOOK_VERIFY_TOKEN not configured")

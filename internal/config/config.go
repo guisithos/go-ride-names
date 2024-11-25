@@ -10,23 +10,10 @@ import (
 type Config struct {
 	StravaClientID     string
 	StravaClientSecret string
-
-	Server struct {
-		Host string
-		Port string
-	}
-	CORS struct {
-		AllowedOrigins []string
-		AllowedMethods []string
-		AllowedHeaders []string
-	}
-	OAuth struct {
+	BaseURL            string
+	OAuth              struct {
 		RedirectURI string
 	}
-	Redis struct {
-		URL string
-	}
-	WebhookVerifyToken string
 }
 
 // LoadConfig loads configuration from environment variables
@@ -39,9 +26,14 @@ func LoadConfig() (*Config, error) {
 	// Load Strava configuration
 	config.StravaClientID = os.Getenv("STRAVA_CLIENT_ID")
 	config.StravaClientSecret = os.Getenv("STRAVA_CLIENT_SECRET")
-	config.OAuth.RedirectURI = getEnvOrDefault("OAUTH_REDIRECT_URI", "http://localhost:8080/callback")
-	config.Redis.URL = getEnvOrDefault("REDIS_URL", "redis://localhost:6379")
-	config.WebhookVerifyToken = getEnvOrDefault("WEBHOOK_VERIFY_TOKEN", "")
+	config.BaseURL = getEnvOrDefault("BASE_URL", "http://localhost:8080")
+
+	// If OAUTH_REDIRECT_URI is not set, construct it from BASE_URL
+	redirectURI := os.Getenv("OAUTH_REDIRECT_URI")
+	if redirectURI == "" {
+		redirectURI = config.BaseURL + "/callback"
+	}
+	config.OAuth.RedirectURI = redirectURI
 
 	// Validate required fields
 	if config.StravaClientID == "" {
