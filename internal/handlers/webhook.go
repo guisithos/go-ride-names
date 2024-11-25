@@ -49,13 +49,15 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"hub.challenge": challenge})
+		json.NewEncoder(w).Encode(map[string]string{
+			"hub.challenge": challenge,
+		})
 
 	case "POST":
 		// Handle webhook events
 		var event WebhookEvent
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 

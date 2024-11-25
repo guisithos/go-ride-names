@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -28,6 +29,7 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", h.handleHome)
 	mux.HandleFunc("/dashboard", h.handleDashboard)
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
+	mux.HandleFunc("/subscribe", h.handleSubscribe)
 }
 
 func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -268,4 +270,32 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens("user")
+	if !exists {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+	// Create webhook subscription
+	callbackURL := "https://go-ride-names-se2bdxecnq-uc.a.run.app/webhook"
+	verifyToken := "your-verify-token" // Use a secure random token in production
+
+	subscription, err := client.CreateWebhookSubscription(callbackURL, verifyToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error creating subscription: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(subscription)
 }

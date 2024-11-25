@@ -24,7 +24,7 @@ steps:
       - '--set-secrets'
       - 'STRAVA_CLIENT_ID=STRAVA_CLIENT_ID:latest,STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest'
       - '--set-env-vars'
-      - 'OAUTH_REDIRECT_URI=https://go-ride-names-se2bdxecnq-uc.a.run.app/callback'
+      - 'OAUTH_REDIRECT_URI=https://go-ride-names-se2bdxecnq-uc.a.run.app/callback,WEBHOOK_VERIFY_TOKEN=your-secure-token'
 
 images:
   - 'gcr.io/$PROJECT_ID/go-ride-names' 
