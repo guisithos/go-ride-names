@@ -248,11 +248,15 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	// Add authorization header
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+
 	// Log request details
 	log.Printf("Request headers: %v", req.Header)
 	log.Printf("Request body: %s", data.Encode())
 
-	resp, err := c.httpClient.Do(req)
+	// Use doRequest instead of httpClient.Do directly
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}

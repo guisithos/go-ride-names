@@ -290,6 +290,13 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate tokens
+	if tokens.AccessToken == "" {
+		log.Printf("Access token is empty")
+		http.Error(w, "Invalid access token", http.StatusUnauthorized)
+		return
+	}
+
 	// Get base URL from request or environment
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
@@ -298,6 +305,13 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	callbackURL := baseURL + "/webhook"
 	log.Printf("Subscription attempt - Base URL: %s, Callback URL: %s", baseURL, callbackURL)
 
+	// Validate Strava configuration
+	if h.stravaConfig.StravaClientID == "" || h.stravaConfig.StravaClientSecret == "" {
+		log.Printf("Error: Strava credentials not configured properly")
+		http.Error(w, "Strava configuration error", http.StatusInternalServerError)
+		return
+	}
+
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
 		log.Printf("Error: WEBHOOK_VERIFY_TOKEN not configured")
@@ -305,8 +319,11 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Creating Strava client with ID: %s", h.stravaConfig.StravaClientID)
-	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	log.Printf("Creating Strava client with ID: %s, Access Token: %s (first 10 chars)",
+		h.stravaConfig.StravaClientID, tokens.AccessToken[:10])
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
 	err := activityService.SubscribeToWebhooks(callbackURL, verifyToken)
