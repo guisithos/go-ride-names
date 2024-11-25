@@ -304,3 +304,33 @@ func (c *Client) GetActivity(activityID int64) (*Activity, error) {
 
 	return &activity, nil
 }
+
+func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
+	// Build URL with query parameters
+	u, err := url.Parse(webhookSubscriptionURL)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("client_id", c.clientID)
+	q.Set("client_secret", c.clientSecret)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var subscriptions []WebhookSubscription
+	if err := json.NewDecoder(resp.Body).Decode(&subscriptions); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
+	}
+
+	return subscriptions, nil
+}

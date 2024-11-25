@@ -121,7 +121,25 @@ func (s *ActivityService) ProcessNewActivity(activityID int64) error {
 }
 
 func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {
-	log.Printf("Attempting to subscribe to webhooks with callback URL: %s", callbackURL)
+	log.Printf("Checking existing webhook subscriptions...")
+
+	// First, list existing subscriptions
+	subscriptions, err := s.client.ListWebhookSubscriptions()
+	if err != nil {
+		log.Printf("Error listing subscriptions: %v", err)
+		// Continue anyway, as the error might be due to permissions
+	}
+
+	// Check if we already have a subscription with this callback URL
+	for _, sub := range subscriptions {
+		if sub.CallbackURL == callbackURL {
+			log.Printf("Found existing subscription with ID: %d", sub.ID)
+			s.webhookSubscription = &sub
+			return nil // Success - we're already subscribed
+		}
+	}
+
+	log.Printf("No existing subscription found, creating new one with callback URL: %s", callbackURL)
 
 	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {

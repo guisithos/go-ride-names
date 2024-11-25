@@ -328,8 +328,8 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	err := activityService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {
-		log.Printf("Error creating webhook subscription: %v", err)
-		http.Error(w, fmt.Sprintf("Error creating subscription: %v", err), http.StatusInternalServerError)
+		log.Printf("Error managing webhook subscription: %v", err)
+		http.Error(w, fmt.Sprintf("Error managing subscription: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -338,7 +338,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
-	log.Printf("Successfully created webhook subscription")
+	log.Printf("Webhook subscription is active")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": true})
 }

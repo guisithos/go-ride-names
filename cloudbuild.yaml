@@ -20,6 +20,7 @@ steps:
       - 'us-central1'
       - '--platform'
       - 'managed'
+      - '--allow-unauthenticated'
       - '--set-secrets'
       - 'STRAVA_CLIENT_ID=STRAVA_CLIENT_ID:latest,STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest'
       - '--set-env-vars'
