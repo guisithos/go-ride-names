@@ -62,7 +62,7 @@ func NewOAuthHandler(cfg *config.Config, sessions *SessionStore) *OAuthHandler {
 		config: &OAuth2Config{
 			ClientID:     cfg.StravaClientID,
 			ClientSecret: cfg.StravaClientSecret,
-			RedirectURI:  "http://localhost:8080/callback",
+			RedirectURI:  cfg.OAuth.RedirectURI,
 		},
 		sessions: sessions,
 	}
