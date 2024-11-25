@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	baseURL       = "https://www.strava.com/api/v3"
-	authURL       = "https://www.strava.com/oauth/token"
-	activitiesURL = baseURL + "/athlete/activities"
+	baseURL                = "https://www.strava.com/api/v3"
+	authURL                = "https://www.strava.com/oauth/token"
+	activitiesURL          = baseURL + "/athlete/activities"
+	webhookSubscriptionURL = baseURL + "/push_subscriptions"
 )
 
 type Client struct {
@@ -33,6 +34,13 @@ type TokenResponse struct {
 
 type UpdateActivityRequest struct {
 	Name string `json:"name"`
+}
+
+type WebhookSubscription struct {
+	ID            int    `json:"id"`
+	ApplicationID int    `json:"application_id"`
+	CallbackURL   string `json:"callback_url"`
+	VerifyToken   string `json:"verify_token"`
 }
 
 func NewClient(accessToken, refreshToken, clientID, clientSecret string) *Client {
@@ -220,4 +228,58 @@ func (c *Client) UpdateActivity(activityID int64, name string) error {
 	}
 
 	return nil
+}
+
+func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*WebhookSubscription, error) {
+	data := url.Values{}
+	data.Set("client_id", c.clientID)
+	data.Set("client_secret", c.clientSecret)
+	data.Set("callback_url", callbackURL)
+	data.Set("verify_token", verifyToken)
+
+	req, err := http.NewRequest("POST", webhookSubscriptionURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var subscription WebhookSubscription
+	if err := json.NewDecoder(resp.Body).Decode(&subscription); err != nil {
+		return nil, err
+	}
+
+	return &subscription, nil
+}
+
+func (c *Client) GetActivity(activityID int64) (*Activity, error) {
+	url := fmt.Sprintf("%s/activities/%d", baseURL, activityID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get activity: status=%d, body=%s", resp.StatusCode, string(body))
+	}
+
+	var activity Activity
+	if err := json.NewDecoder(resp.Body).Decode(&activity); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
+	}
+
+	return &activity, nil
 }

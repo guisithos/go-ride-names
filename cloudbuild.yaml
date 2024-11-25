@@ -1,0 +1,28 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/go-ride-names', '.']
+  
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/go-ride-names']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'go-ride-names'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/go-ride-names'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'STRAVA_CLIENT_ID=${_STRAVA_CLIENT_ID},STRAVA_CLIENT_SECRET=${_STRAVA_CLIENT_SECRET}'
+
+images:
+  - 'gcr.io/$PROJECT_ID/go-ride-names' 

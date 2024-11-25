@@ -1,0 +1,10 @@
+runtime: go121
+env: standard
+
+env_variables:
+  STRAVA_CLIENT_ID: ""  # Set in Cloud Console
+  STRAVA_CLIENT_SECRET: ""  # Set in Cloud Console
+
+handlers:
+- url: /.*
+  script: auto 

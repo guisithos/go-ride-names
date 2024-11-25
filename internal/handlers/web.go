@@ -88,17 +88,51 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				<style>
 					body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
 					.activity { border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 4px; }
-					.btn { background: #FC4C02; color: white; padding: 12px 24px; 
-						   text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }
+					.btn { 
+						background: #FC4C02; 
+						color: white; 
+						padding: 12px 24px; 
+						text-decoration: none; 
+						border-radius: 4px; 
+						border: none; 
+						cursor: pointer;
+						margin-left: 10px;
+					}
+					.btn:disabled {
+						background: #ccc;
+						cursor: not-allowed;
+					}
 					.loading { text-align: center; padding: 20px; }
 					.error { color: red; padding: 10px; }
-					.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+					.header { 
+						display: flex; 
+						justify-content: space-between; 
+						align-items: center; 
+						margin-bottom: 20px; 
+					}
+					.buttons-container {
+						display: flex;
+						gap: 10px;
+					}
+					.status { 
+						padding: 10px; 
+						margin: 20px 0; 
+						border-radius: 4px; 
+					}
+					.status.active { background: #e8f5e9; color: #2e7d32; }
+					.status.inactive { background: #ffebee; color: #c62828; }
 				</style>
 			</head>
 			<body>
 				<div class="header">
 					<h1>Your Activities</h1>
-					<button id="rename" class="btn">Rename Activities</button>
+					<div class="buttons-container">
+						<button id="rename" class="btn">Rename All</button>
+						<button id="subscribe" class="btn">Activate Auto-Rename</button>
+					</div>
+				</div>
+				<div id="subscription-status" class="status inactive">
+					Auto-rename is currently inactive
 				</div>
 				<div id="activities">
 					<div class="loading">Loading activities...</div>
@@ -176,10 +210,40 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 							button.textContent = 'Rename Activities';
 						}
 					});
+
+					// Add subscription handling
+					document.getElementById('subscribe').addEventListener('click', async () => {
+						const button = document.getElementById('subscribe');
+						const status = document.getElementById('subscription-status');
+						
+						button.disabled = true;
+						button.textContent = 'Activating...';
+
+						try {
+							const response = await fetch('/subscribe', {
+								method: 'POST',
+								headers: {
+									'Authorization': 'Bearer %s'
+								}
+							});
+							
+							if (response.ok) {
+								status.className = 'status active';
+								status.textContent = 'Auto-rename is active! New activities will be renamed automatically.';
+								button.style.display = 'none';
+							} else {
+								throw new Error('Failed to activate');
+							}
+						} catch (error) {
+							alert('Error activating auto-rename: ' + error.message);
+							button.disabled = false;
+							button.textContent = 'Activate Auto-Rename';
+						}
+					});
 				</script>
 			</body>
 		</html>
-	`, tokens.AccessToken, tokens.AccessToken)
+	`, tokens.AccessToken, tokens.AccessToken, tokens.AccessToken)
 }
 
 func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Request) {

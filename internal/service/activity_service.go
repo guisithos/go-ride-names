@@ -38,7 +38,8 @@ var defaultActivityNames = map[string]bool{
 }
 
 type ActivityService struct {
-	client *strava.Client
+	client              *strava.Client
+	webhookSubscription *strava.WebhookSubscription
 }
 
 func NewActivityService(client *strava.Client) *ActivityService {
@@ -103,4 +104,24 @@ func getRandomJoke(activityType string) string {
 		jokes = activityJokes[Default]
 	}
 	return jokes[rng.Intn(len(jokes))]
+}
+
+func (s *ActivityService) ProcessNewActivity(activityID int64) error {
+	// Get the activity details
+	activity, err := s.client.GetActivity(activityID)
+	if err != nil {
+		return err
+	}
+
+	// Update the activity name if it's a default name
+	return s.UpdateActivityWithFunName(activity)
+}
+
+func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {
+	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
+	if err != nil {
+		return err
+	}
+	s.webhookSubscription = subscription
+	return nil
 }

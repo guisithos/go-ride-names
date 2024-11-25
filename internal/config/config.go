@@ -42,14 +42,17 @@ func LoadConfig() (*Config, error) {
 	fmt.Printf("STRAVA_CLIENT_ID: '%s'\n", os.Getenv("STRAVA_CLIENT_ID"))
 	fmt.Printf("STRAVA_CLIENT_SECRET: '%s'\n", os.Getenv("STRAVA_CLIENT_SECRET"))
 
+	// Add support for Google Cloud's PORT environment variable
+	port := getEnvOrDefault("PORT", "8080")
+
 	config := &Config{
 		StravaClientID:     os.Getenv("STRAVA_CLIENT_ID"),
 		StravaClientSecret: os.Getenv("STRAVA_CLIENT_SECRET"),
 	}
 
-	// Server config
-	config.Server.Host = getEnvOrDefault("SERVER_HOST", "localhost")
-	config.Server.Port = getEnvOrDefault("SERVER_PORT", "8080")
+	// Update server config
+	config.Server.Host = getEnvOrDefault("SERVER_HOST", "0.0.0.0")
+	config.Server.Port = port
 
 	// CORS config
 	config.CORS.AllowedOrigins = strings.Split(getEnvOrDefault("CORS_ALLOWED_ORIGINS", "*"), ",")
