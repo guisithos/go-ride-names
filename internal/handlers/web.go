@@ -349,7 +349,28 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Check both session and verify actual subscription
 	active := h.sessions.Get("webhook_active") != nil
+
+	if active {
+		// Verify the subscription is still valid
+		tokens, exists := h.sessions.GetTokens("user")
+		if exists {
+			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+			subs, err := client.ListWebhookSubscriptions()
+			if err != nil || len(subs) == 0 {
+				log.Printf("Subscription check failed: %v", err)
+				active = false
+				h.sessions.Set("webhook_active", nil)
+			}
+		} else {
+			active = false
+			h.sessions.Set("webhook_active", nil)
+		}
+	}
+
+	log.Printf("Subscription status check - Active: %v", active)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
 }

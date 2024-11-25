@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"time"
 
 	"github.com/guisithos/go-ride-names/internal/strava"
@@ -140,6 +141,17 @@ func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) e
 	}
 
 	log.Printf("No existing subscription found, creating new one with callback URL: %s", callbackURL)
+
+	// Verify the callback URL is accessible
+	resp, err := http.Get(callbackURL)
+	if err != nil {
+		log.Printf("Warning: Callback URL may not be accessible: %v", err)
+	} else {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMethodNotAllowed {
+			log.Printf("Warning: Callback URL returned status %d", resp.StatusCode)
+		}
+	}
 
 	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {
