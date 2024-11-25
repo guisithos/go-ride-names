@@ -33,6 +33,7 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/dashboard", h.handleDashboard)
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
+	mux.HandleFunc("/subscription-status", h.handleSubscriptionStatus)
 }
 
 func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -288,23 +289,38 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	activityService := service.NewActivityService(client)
 
-	// Get verify token from environment
+	// Create webhook subscription
+	callbackURL := "https://go-ride-names-se2bdxecnq-uc.a.run.app/webhook"
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
+		log.Printf("Error: WEBHOOK_VERIFY_TOKEN not configured")
 		http.Error(w, "Webhook verify token not configured", http.StatusInternalServerError)
 		return
 	}
 
-	// Create webhook subscription
-	callbackURL := "https://go-ride-names-se2bdxecnq-uc.a.run.app/webhook"
-	subscription, err := client.CreateWebhookSubscription(callbackURL, verifyToken)
+	err := activityService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {
-		log.Printf("Error creating webhook subscription: %v", err) // Add logging
+		log.Printf("Error creating webhook subscription: %v", err)
 		http.Error(w, fmt.Sprintf("Error creating subscription: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Store subscription status in session
+	h.sessions.Set("webhook_active", true)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subscription)
+	json.NewEncoder(w).Encode(map[string]bool{"active": true})
+}
+
+func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	active := h.sessions.Get("webhook_active") != nil
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"active": active})
 }

@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -24,37 +23,25 @@ type Config struct {
 	OAuth struct {
 		RedirectURI string
 	}
+	Redis struct {
+		URL string
+	}
+	WebhookVerifyToken string
 }
 
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
-	// Remove .env loading in production
-	if os.Getenv("ENVIRONMENT") != "production" {
-		if err := godotenv.Load(); err != nil {
-			fmt.Printf("Warning: Error loading .env file: %v\n", err)
-		}
-	}
+	// Load .env file if it exists
+	godotenv.Load()
 
-	// Add support for Google Cloud's PORT environment variable
-	port := getEnvOrDefault("PORT", "8080")
+	config := &Config{}
 
-	config := &Config{
-		StravaClientID:     os.Getenv("STRAVA_CLIENT_ID"),
-		StravaClientSecret: os.Getenv("STRAVA_CLIENT_SECRET"),
-	}
-
-	// Update server config
-	config.Server.Host = getEnvOrDefault("SERVER_HOST", "0.0.0.0")
-	config.Server.Port = port
-
-	// CORS config
-	config.CORS.AllowedOrigins = strings.Split(getEnvOrDefault("CORS_ALLOWED_ORIGINS", "*"), ",")
-	config.CORS.AllowedMethods = strings.Split(getEnvOrDefault("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"), ",")
-	config.CORS.AllowedHeaders = strings.Split(getEnvOrDefault("CORS_ALLOWED_HEADERS", "Content-Type,Authorization"), ",")
-
-	// OAuth config
-	defaultRedirectURI := "https://go-ride-names-se2bdxecnq-uc.a.run.app/callback"
-	config.OAuth.RedirectURI = getEnvOrDefault("OAUTH_REDIRECT_URI", defaultRedirectURI)
+	// Load Strava configuration
+	config.StravaClientID = os.Getenv("STRAVA_CLIENT_ID")
+	config.StravaClientSecret = os.Getenv("STRAVA_CLIENT_SECRET")
+	config.OAuth.RedirectURI = getEnvOrDefault("OAUTH_REDIRECT_URI", "http://localhost:8080/callback")
+	config.Redis.URL = getEnvOrDefault("REDIS_URL", "redis://localhost:6379")
+	config.WebhookVerifyToken = getEnvOrDefault("WEBHOOK_VERIFY_TOKEN", "")
 
 	// Validate required fields
 	if config.StravaClientID == "" {

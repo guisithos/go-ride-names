@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sync"
 
 	"github.com/guisithos/go-ride-names/internal/config"
 )
@@ -26,30 +25,6 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
-}
-
-type SessionStore struct {
-	sync.RWMutex
-	tokens map[string]*TokenResponse
-}
-
-func NewSessionStore() *SessionStore {
-	return &SessionStore{
-		tokens: make(map[string]*TokenResponse),
-	}
-}
-
-func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
-	s.RLock()
-	defer s.RUnlock()
-	tokens, exists := s.tokens[userID]
-	return tokens, exists
-}
-
-func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) {
-	s.Lock()
-	defer s.Unlock()
-	s.tokens[userID] = tokens
 }
 
 type OAuthHandler struct {
