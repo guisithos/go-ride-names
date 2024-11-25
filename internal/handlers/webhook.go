@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/guisithos/go-ride-names/internal/auth"
+	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/service"
+	"github.com/guisithos/go-ride-names/internal/strava"
 )
 
 type WebhookEvent struct {
@@ -21,11 +24,12 @@ type WebhookEvent struct {
 }
 
 type WebhookHandler struct {
-	activityService *service.ActivityService
-	verifyToken     string
+	sessions     *auth.SessionStore
+	stravaConfig *config.Config
+	verifyToken  string
 }
 
-func NewWebhookHandler(activityService *service.ActivityService) *WebhookHandler {
+func NewWebhookHandler(sessions *auth.SessionStore, stravaConfig *config.Config) *WebhookHandler {
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
 		log.Println("Warning: WEBHOOK_VERIFY_TOKEN not set")
@@ -36,8 +40,9 @@ func NewWebhookHandler(activityService *service.ActivityService) *WebhookHandler
 	}
 
 	return &WebhookHandler{
-		activityService: activityService,
-		verifyToken:     verifyToken,
+		sessions:     sessions,
+		stravaConfig: stravaConfig,
+		verifyToken:  verifyToken,
 	}
 }
 
@@ -91,8 +96,21 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		// Process only new activities
 		if event.ObjectType == "activity" && event.AspectType == "create" {
 			log.Printf("Processing new activity: ID=%d", event.ObjectID)
+
+			// Get tokens from session
+			tokens, exists := h.sessions.GetTokens("user")
+			if !exists {
+				log.Printf("No tokens found in session for processing activity %d", event.ObjectID)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+			activityService := service.NewActivityService(client)
+
 			go func() {
-				if err := h.activityService.ProcessNewActivity(event.ObjectID); err != nil {
+				if err := activityService.ProcessNewActivity(event.ObjectID); err != nil {
 					log.Printf("Error processing activity %d: %v", event.ObjectID, err)
 				}
 			}()

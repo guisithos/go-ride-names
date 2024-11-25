@@ -8,8 +8,6 @@ import (
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/handlers"
-	"github.com/guisithos/go-ride-names/internal/service"
-	"github.com/guisithos/go-ride-names/internal/strava"
 )
 
 func main() {
@@ -27,10 +25,8 @@ func main() {
 	oauthHandler := auth.NewOAuthHandler(cfg, sessions)
 	oauthHandler.RegisterRoutes(mux)
 
-	// Create webhook handler
-	stravaClient := strava.NewClient("", "", cfg.StravaClientID, cfg.StravaClientSecret)
-	activityService := service.NewActivityService(stravaClient)
-	webhookHandler := handlers.NewWebhookHandler(activityService)
+	// Create webhook handler with session-aware client
+	webhookHandler := handlers.NewWebhookHandler(sessions, cfg)
 	webhookHandler.RegisterRoutes(mux)
 
 	// Setup web handler

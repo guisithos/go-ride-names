@@ -98,19 +98,24 @@ func (c *Client) RefreshToken() error {
 
 // handle automatic token refresh
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+	// Add authorization header
+	if c.accessToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
+	// Handle token refresh if needed
 	if resp.StatusCode == http.StatusUnauthorized {
+		log.Printf("Token expired, attempting refresh")
 		if err := c.RefreshToken(); err != nil {
 			return nil, fmt.Errorf("token refresh failed: %v", err)
 		}
 
-		// Retry the request with the new token
+		// Retry request with new token
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
 		return c.httpClient.Do(req)
 	}
