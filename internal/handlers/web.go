@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+
+	"log"
 
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
@@ -286,12 +289,18 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 
+	// Get verify token from environment
+	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
+	if verifyToken == "" {
+		http.Error(w, "Webhook verify token not configured", http.StatusInternalServerError)
+		return
+	}
+
 	// Create webhook subscription
 	callbackURL := "https://go-ride-names-se2bdxecnq-uc.a.run.app/webhook"
-	verifyToken := "your-verify-token" // Use a secure random token in production
-
 	subscription, err := client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {
+		log.Printf("Error creating webhook subscription: %v", err) // Add logging
 		http.Error(w, fmt.Sprintf("Error creating subscription: %v", err), http.StatusInternalServerError)
 		return
 	}

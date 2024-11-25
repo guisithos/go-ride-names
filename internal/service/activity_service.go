@@ -107,14 +107,17 @@ func getRandomJoke(activityType string) string {
 }
 
 func (s *ActivityService) ProcessNewActivity(activityID int64) error {
-	// Get the activity details
 	activity, err := s.client.GetActivity(activityID)
 	if err != nil {
-		return err
+		return fmt.Errorf("error getting activity: %v", err)
 	}
 
-	// Update the activity name if it's a default name
-	return s.UpdateActivityWithFunName(activity)
+	// Only process if it has a default name
+	if defaultActivityNames[activity.Name] {
+		return s.UpdateActivityWithFunName(activity)
+	}
+
+	return nil
 }
 
 func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {

@@ -239,24 +239,27 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 
 	req, err := http.NewRequest("POST", webhookSubscriptionURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating request: %v", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to create subscription: status=%d, body=%s", resp.StatusCode, string(body))
 	}
 
+	// Try to decode the response
 	var subscription WebhookSubscription
-	if err := json.NewDecoder(resp.Body).Decode(&subscription); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &subscription); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v, body: %s", err, string(body))
 	}
 
 	return &subscription, nil

@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/guisithos/go-ride-names/internal/service"
 )
@@ -23,11 +25,18 @@ type WebhookHandler struct {
 }
 
 func NewWebhookHandler(activityService *service.ActivityService) *WebhookHandler {
-	token := make([]byte, 32)
-	rand.Read(token)
+	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
+	if verifyToken == "" {
+		log.Println("Warning: WEBHOOK_VERIFY_TOKEN not set")
+		// Generate a random token as fallback
+		token := make([]byte, 32)
+		rand.Read(token)
+		verifyToken = hex.EncodeToString(token)
+	}
+
 	return &WebhookHandler{
 		activityService: activityService,
-		verifyToken:     hex.EncodeToString(token),
+		verifyToken:     verifyToken,
 	}
 }
 
