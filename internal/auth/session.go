@@ -63,7 +63,7 @@ func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
 	s.RLock()
 	defer s.RUnlock()
 
-	// Try Redis first if available
+	// Try Redis first i
 	if s.redis != nil {
 		data, err := s.redis.Get(context.Background(), "tokens:"+userID).Bytes()
 		if err == nil {
@@ -83,7 +83,7 @@ func (s *SessionStore) Set(key string, value interface{}) error {
 	s.Lock()
 	defer s.Unlock()
 
-	// Store in Redis if available
+	// Store in Redis
 	if s.redis != nil {
 		data, err := json.Marshal(value)
 		if err != nil {
@@ -105,7 +105,7 @@ func (s *SessionStore) Get(key string) interface{} {
 	s.RLock()
 	defer s.RUnlock()
 
-	// Try Redis first if available
+	// Try Redis first
 	if s.redis != nil {
 		data, err := s.redis.Get(context.Background(), key).Bytes()
 		if err == nil {

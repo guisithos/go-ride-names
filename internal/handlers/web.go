@@ -46,33 +46,133 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `
 		<html>
 			<head>
-				<title>Go Ride Names - Make Your Strava Activities Fun!</title>
+				<title>zoAtleta - Seu treino, nossa piada!</title>
 				<style>
-					body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-					.container { text-align: center; }
-					.btn { display: inline-block; background: #FC4C02; color: white; padding: 12px 24px; 
-						   text-decoration: none; border-radius: 4px; margin: 20px 0; }
-					.features { text-align: left; margin: 20px 0; }
-					.feature-list { list-style-type: none; padding: 0; }
-					.feature-list li { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+					body { 
+						font-family: 'Segoe UI', Arial, sans-serif;
+						max-width: 1000px;
+						margin: 0 auto;
+						padding: 20px;
+						background-color: #f5f5f5;
+						color: #333;
+					}
+					.header {
+						display: flex;
+						align-items: center;
+						gap: 20px;
+						margin-bottom: 40px;
+					}
+					.header img {
+						height: 80px;
+						width: auto;
+					}
+					.header-text {
+						flex: 1;
+					}
+					h1 {
+						font-size: 2.5em;
+						margin: 0;
+						color: #FC4C02;
+					}
+					.slogan {
+						font-size: 1.2em;
+						color: #666;
+						margin: 5px 0;
+					}
+					.description {
+						font-size: 1.1em;
+						line-height: 1.6;
+						margin: 30px 0;
+						color: #444;
+					}
+					.features {
+						background: white;
+						padding: 25px;
+						border-radius: 10px;
+						box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+						margin: 30px 0;
+					}
+					.features h2 {
+						color: #FC4C02;
+						margin-top: 0;
+					}
+					.features ul {
+						list-style-type: none;
+						padding: 0;
+					}
+					.features li {
+						margin: 15px 0;
+						padding-left: 25px;
+						position: relative;
+					}
+					.features li:before {
+						content: "✓";
+						position: absolute;
+						left: 0;
+						color: #FC4C02;
+					}
+					.connect-button {
+						background-color: #FC4C02;
+						color: white;
+						padding: 15px 30px;
+						border: none;
+						border-radius: 5px;
+						font-size: 1.1em;
+						cursor: pointer;
+						transition: background-color 0.3s;
+						display: block;
+						width: fit-content;
+						margin: 30px auto;
+						text-decoration: none;
+					}
+					.connect-button:hover {
+						background-color: #E34402;
+					}
+					.strava-badge {
+						display: block;
+						margin: 20px auto;
+						height: 40px;
+						width: auto;
+					}
+					.container {
+						background: white;
+						padding: 40px;
+						border-radius: 15px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+					}
 				</style>
 			</head>
 			<body>
 				<div class="container">
-					<h1>Go Ride Names</h1>
-					<p>Automatically rename your Strava activities with fun, witty names!</p>
-					
+					<div class="header">
+						<img src="/static/zoaAtleta_logo.png" alt="zoAtleta Logo">
+						<div class="header-text">
+							<h1>zoAtleta</h1>
+							<div class="slogan">Seu treino, nossa piada</div>
+						</div>
+					</div>
+
+					<div class="description">
+						Aplicativo básico criado em Go que irá mudar o nome das suas atividades padrões do Strava para trocadilhos e piadas relacionadas ao esporte, com pitadas de séries, filmes, livros e um pouco de cultura nerd e geek.
+					</div>
+
 					<div class="features">
-						<h2>What does it do?</h2>
-						<ul class="feature-list">
-							<li>Finds your activities with default names</li>
-							<li>Generates activity-specific witty names</li>
-							<li>Updates them automatically</li>
-							<li>Works with runs, rides, swims, and more!</li>
+						<h2>Como funciona?</h2>
+						<ul>
+							<li>Conecte sua conta do Strava</li>
+							<li>Suas atividades padrão serão renomeadas automaticamente</li>
+							<li>Divirta-se com nomes criativos e engraçados</li>
+							<li>Compartilhe com seus amigos</li>
 						</ul>
 					</div>
 
-					<a href="/auth" class="btn">Connect with Strava</a>
+					<a href="/auth/strava" class="connect-button">
+						Conectar com Strava
+					</a>
+
+					<img src="/static/api_logo_cptblWith_strava_horiz_gray.png" 
+						 alt="Compatible with Strava" 
+						 class="strava-badge">
 				</div>
 			</body>
 		</html>

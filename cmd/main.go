@@ -33,6 +33,10 @@ func main() {
 	webHandler := handlers.NewWebHandler(sessions, oauthHandler.GetConfig(), cfg)
 	webHandler.RegisterRoutes(mux)
 
+	// Add static file serving
+	fs := http.FileServer(http.Dir("static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
