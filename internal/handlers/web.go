@@ -176,7 +176,7 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 						</ul>
 					</div>
 
-					<a href="/auth/strava" class="connect-button">
+					<a href="/auth" class="connect-button">
 						Conectar com Strava
 					</a>
 
