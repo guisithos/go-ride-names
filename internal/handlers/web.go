@@ -42,11 +42,21 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `
-		<html>
+		<!DOCTYPE html>
+		<html lang="pt-BR">
 			<head>
+				<meta charset="UTF-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<title>zoAtleta - Seu treino, nossa piada!</title>
+				
+				<!-- Favicon -->
+				<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+				<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+				<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+				<link rel="manifest" href="/static/site.webmanifest">
+				<meta name="theme-color" content="#FC4C02">
 				<style>
 					body { 
 						font-family: 'Segoe UI', Arial, sans-serif;

@@ -29,4 +29,10 @@ RUN go build -o /server ./cmd/main.go
 EXPOSE 8080
 
 # Run the server
-CMD ["/server"] 
+CMD ["/server"]
+
+# Create directory for static files
+RUN mkdir -p /app/static/favicon
+
+# Copy static files
+COPY static/ /app/static/ 

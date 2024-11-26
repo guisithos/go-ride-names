@@ -2,4 +2,6 @@
 .env
 .env.local
 *.md
-/resources 
+/resources
+# Don't ignore static directory
+!static/ 
