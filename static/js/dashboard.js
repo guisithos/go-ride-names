@@ -1,4 +1,4 @@
-// Activity type icons mapping
+// Activity type icons mapping with more variations
 const activityIcons = {
     Run: "🏃",
     Ride: "🚴",
@@ -9,10 +9,20 @@ const activityIcons = {
     Yoga: "🧘",
     CrossFit: "🏋️",
     VirtualRide: "🎮",
+    // Add Strava's specific activity types
+    WeightLifting: "💪",
+    Strength: "💪"
 };
 
 // Define stationary activities that should show duration instead of distance
-const stationaryActivities = ['WeightTraining', 'Workout', 'Yoga', 'CrossFit'];
+const stationaryActivities = [
+    'WeightTraining',
+    'Workout',
+    'Yoga',
+    'CrossFit',
+    'WeightLifting',
+    'Strength'
+];
 
 // Format duration in seconds to hours and minutes
 function formatDuration(seconds) {
@@ -60,15 +70,45 @@ async function loadActivities() {
 
         const activities = await response.json();
         
+        // Debug: Log activity types
+        console.log('Activity types received:', activities.map(a => ({
+            name: a.name,
+            type: a.type,
+            sport_type: a.sport_type
+        })));
+
+        // Map activity types to our preferred display names
+        const mappedActivities = activities.map(activity => {
+            let mappedType = activity.type;
+            
+            // Map specific workout types based on activity name or sport_type
+            if (activity.type === 'Workout') {
+                if (activity.name.toLowerCase().includes('yoga')) {
+                    mappedType = 'Yoga';
+                } else if (
+                    activity.name.toLowerCase().includes('weight') ||
+                    activity.name.toLowerCase().includes('força') ||
+                    activity.name.toLowerCase().includes('musculação')
+                ) {
+                    mappedType = 'WeightTraining';
+                }
+            }
+
+            return {
+                ...activity,
+                type: mappedType
+            };
+        });
+        
         // Process activities for stats
-        const stats = processActivitiesStats(activities);
+        const stats = processActivitiesStats(mappedActivities);
         displayStats(stats);
 
         // Display recent activities (first 5)
-        displayRecentActivities(activities.slice(0, 5));
+        displayRecentActivities(mappedActivities.slice(0, 5));
 
         // Store remaining activities
-        window.remainingActivities = activities.slice(5);
+        window.remainingActivities = mappedActivities.slice(5);
 
     } catch (error) {
         console.error('Error:', error);
