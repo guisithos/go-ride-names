@@ -7,4 +7,198 @@ body {
     color: #333;
 }
 
+.header {
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.header img {
+    height: 60px;
+    width: auto;
+}
+
+.header-text h1 {
+    margin: 0;
+    color: #FC4C02;
+    font-size: 2em;
+}
+
+.slogan {
+    color: #666;
+    font-size: 1.1em;
+}
+
+.buttons-container {
+    display: flex;
+    gap: 15px;
+}
+
+.btn {
+    background-color: #FC4C02;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn:hover {
+    background-color: #E34402;
+}
+
+.btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.status {
+    text-align: center;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 20px 0;
+    font-weight: 500;
+}
+
+.status.active {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.status.inactive {
+    background-color: #fff3e0;
+    color: #ef6c00;
+    border: 1px solid #ffcc80;
+}
+
+.analytics-container {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin: 30px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.activity-stat {
+    text-align: center;
+    padding: 15px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    transition: transform 0.2s;
+}
+
+.activity-stat:hover {
+    transform: translateY(-5px);
+}
+
+.activity-stat .icon {
+    font-size: 2em;
+    margin-bottom: 10px;
+    color: #FC4C02;
+}
+
+.activity-stat .count {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #333;
+}
+
+.activity-stat .distance {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.activities-container {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin: 30px 0;
+}
+
+.activities-container h2 {
+    color: #FC4C02;
+    margin-top: 0;
+}
+
+.activity {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.3s;
+}
+
+.activity:hover {
+    background-color: #f8f9fa;
+}
+
+.activity:last-child {
+    border-bottom: none;
+}
+
+.activity h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.activity p {
+    margin: 5px 0;
+    color: #666;
+}
+
+.show-more {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.show-more-btn {
+    background: none;
+    border: 2px solid #FC4C02;
+    color: #FC4C02;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.show-more-btn:hover {
+    background: #FC4C02;
+    color: white;
+}
+
+.activities-expanded {
+    display: none;
+}
+
+.activities-expanded.show {
+    display: block;
+}
+
+.footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #666;
+}
+
+.footer img {
+    height: 40px;
+    width: auto;
+    margin-top: 10px;
+}
+
 /* ... rest of the CSS ... */ 
