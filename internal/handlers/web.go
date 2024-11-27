@@ -196,69 +196,187 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `
-		<html>
+		<!DOCTYPE html>
+		<html lang="pt-BR">
 			<head>
-				<title>Dashboard - Go Ride Names</title>
+				<meta charset="UTF-8">
+				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<title>Dashboard - zoAtleta</title>
+				
+				<!-- Favicon -->
+				<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+				<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+				<link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+				<link rel="manifest" href="/static/site.webmanifest">
+				<meta name="theme-color" content="#FC4C02">
 				<style>
-					body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-					.activity { border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 4px; }
-					.btn { 
-						background: #FC4C02; 
-						color: white; 
-						padding: 12px 24px; 
-						text-decoration: none; 
-						border-radius: 4px; 
-						border: none; 
+					body { 
+						font-family: 'Segoe UI', Arial, sans-serif;
+						max-width: 1200px;
+						margin: 0 auto;
+						padding: 20px;
+						background-color: #f5f5f5;
+						color: #333;
+					}
+					.header {
+						background: white;
+						padding: 20px;
+						border-radius: 15px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+						display: flex;
+						justify-content: space-between;
+						align-items: center;
+						margin-bottom: 30px;
+					}
+					.header-left {
+						display: flex;
+						align-items: center;
+						gap: 20px;
+					}
+					.header img {
+						height: 60px;
+						width: auto;
+					}
+					.header-text h1 {
+						font-size: 2em;
+						margin: 0;
+						color: #FC4C02;
+					}
+					.header-text .slogan {
+						color: #666;
+						font-size: 1em;
+					}
+					.buttons-container {
+						display: flex;
+						gap: 15px;
+					}
+					.btn {
+						background: #FC4C02;
+						color: white;
+						padding: 12px 24px;
+						border: none;
+						border-radius: 5px;
+						font-size: 1em;
 						cursor: pointer;
-						margin-left: 10px;
+						transition: background-color 0.3s;
+						text-decoration: none;
+						display: inline-flex;
+						align-items: center;
+						gap: 8px;
+					}
+					.btn:hover {
+						background: #E34402;
 					}
 					.btn:disabled {
 						background: #ccc;
 						cursor: not-allowed;
 					}
-					.loading { text-align: center; padding: 20px; }
-					.error { color: red; padding: 10px; }
-					.header { 
-						display: flex; 
-						justify-content: space-between; 
-						align-items: center; 
-						margin-bottom: 20px; 
+					.status {
+						background: white;
+						padding: 20px;
+						border-radius: 15px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+						margin-bottom: 30px;
 					}
-					.buttons-container {
-						display: flex;
-						gap: 10px;
+					.status.active {
+						border-left: 5px solid #2e7d32;
+						background: #e8f5e9;
 					}
-					.status { 
-						padding: 10px; 
-						margin: 20px 0; 
-						border-radius: 4px; 
+					.status.inactive {
+						border-left: 5px solid #c62828;
+						background: #ffebee;
 					}
-					.status.active { background: #e8f5e9; color: #2e7d32; }
-					.status.inactive { background: #ffebee; color: #c62828; }
+					.activities-container {
+						background: white;
+						padding: 30px;
+						border-radius: 15px;
+						box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+					}
+					.activity {
+						border: 1px solid #eee;
+						padding: 20px;
+						margin: 15px 0;
+						border-radius: 8px;
+						transition: transform 0.2s;
+					}
+					.activity:hover {
+						transform: translateX(5px);
+						border-left: 5px solid #FC4C02;
+					}
+					.activity h3 {
+						margin: 0 0 10px 0;
+						color: #FC4C02;
+					}
+					.activity p {
+						margin: 5px 0;
+						color: #666;
+					}
+					.loading {
+						text-align: center;
+						padding: 40px;
+						color: #666;
+					}
+					.error {
+						color: #c62828;
+						background: #ffebee;
+						padding: 15px;
+						border-radius: 8px;
+						margin: 10px 0;
+					}
+					.footer {
+						text-align: center;
+						margin-top: 40px;
+						padding: 20px;
+						color: #666;
+					}
+					.footer img {
+						height: 30px;
+						margin: 10px;
+					}
 				</style>
 			</head>
 			<body>
 				<div class="header">
-					<h1>Your Activities</h1>
+					<div class="header-left">
+						<img src="/static/zoaAtleta_logo.png" alt="zoAtleta Logo">
+						<div class="header-text">
+							<h1>zoAtleta</h1>
+							<div class="slogan">Seu treino, nossa piada</div>
+						</div>
+					</div>
 					<div class="buttons-container">
-						<button id="rename" class="btn">Rename All</button>
-						<button id="subscribe" class="btn">Activate Auto-Rename</button>
+						<button id="rename" class="btn">
+							<span>Renomear Todas</span>
+						</button>
+						<button id="subscribe" class="btn">
+							<span>Ativar Auto-Renomeação</span>
+						</button>
 					</div>
 				</div>
+
 				<div id="subscription-status" class="status inactive">
-					Auto-rename is currently inactive
+					Auto-renomeação está atualmente inativa
 				</div>
-				<div id="activities">
-					<div class="loading">Loading activities...</div>
+
+				<div class="activities-container">
+					<h2>Suas Atividades</h2>
+					<div id="activities">
+						<div class="loading">Carregando atividades...</div>
+					</div>
+				</div>
+
+				<div class="footer">
+					<p>Conectado com</p>
+					<img src="/static/api_logo_cptblWith_strava_horiz_gray.png" alt="Powered by Strava">
 				</div>
 
 				<script>
 					// Function to format date
 					function formatDate(dateStr) {
 						const date = new Date(dateStr);
-						return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+						return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
 					}
 
 					// Function to format distance in km
@@ -276,27 +394,27 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 							});
 							
 							if (!response.ok) {
-								throw new Error('Failed to fetch activities');
+								throw new Error('Falha ao carregar atividades');
 							}
 
 							const activities = await response.json();
 							const container = document.getElementById('activities');
-							container.innerHTML = ''; // Clear loading message
+							container.innerHTML = '';
 
 							activities.forEach(activity => {
 								const div = document.createElement('div');
 								div.className = 'activity';
 								div.innerHTML = `+"`"+`
 									<h3>${activity.name}</h3>
-									<p>Type: ${activity.type}</p>
-									<p>Distance: ${formatDistance(activity.distance)}</p>
-									<p>Date: ${formatDate(activity.start_date_local)}</p>
+									<p>Tipo: ${activity.type}</p>
+									<p>Distância: ${formatDistance(activity.distance)}</p>
+									<p>Data: ${formatDate(activity.start_date_local)}</p>
 								`+"`"+`;
 								container.appendChild(div);
 							});
 						} catch (error) {
 							const container = document.getElementById('activities');
-							container.innerHTML = '<div class="error">Error loading activities: ' + error.message + '</div>';
+							container.innerHTML = '<div class="error">Erro ao carregar atividades: ' + error.message + '</div>';
 						}
 					}
 
@@ -307,88 +425,76 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 					document.getElementById('rename').addEventListener('click', async () => {
 						const button = document.getElementById('rename');
 						button.disabled = true;
-						button.textContent = 'Renaming...';
+						button.innerHTML = '<span>Renomeando...</span>';
 
 						try {
-							await fetch('/rename-activities', {
-								method: 'POST',
-								headers: {
-									'Authorization': 'Bearer %s'
-								}
+							const response = await fetch('/rename-activities', {
+								method: 'POST'
 							});
-							
+
+							if (!response.ok) {
+								throw new Error('Failed to rename activities');
+							}
+
 							// Reload activities after renaming
-							loadActivities();
+							await loadActivities();
 						} catch (error) {
-							alert('Error renaming activities: ' + error.message);
+							console.error('Error:', error);
 						} finally {
 							button.disabled = false;
-							button.textContent = 'Rename Activities';
+							button.innerHTML = '<span>Renomear Todas</span>';
 						}
 					});
 
-					// Add subscription handling
+					// Handle subscribe button click
 					document.getElementById('subscribe').addEventListener('click', async () => {
 						const button = document.getElementById('subscribe');
-						const status = document.getElementById('subscription-status');
-						
 						button.disabled = true;
-						button.textContent = 'Activating...';
+						button.innerHTML = '<span>Ativando...</span>';
 
 						try {
 							const response = await fetch('/subscribe', {
-								method: 'POST',
-								headers: {
-									'Authorization': 'Bearer %s'
-								}
+								method: 'POST'
 							});
-							
-							if (response.ok) {
-								status.className = 'status active';
-								status.textContent = 'Auto-rename is active! New activities will be renamed automatically.';
-								button.style.display = 'none';
-							} else {
-								throw new Error('Failed to activate');
+
+							if (!response.ok) {
+								throw new Error('Failed to subscribe');
 							}
+
+							checkSubscriptionStatus();
 						} catch (error) {
-							alert('Error activating auto-rename: ' + error.message);
+							console.error('Error:', error);
+						} finally {
 							button.disabled = false;
-							button.textContent = 'Activate Auto-Rename';
+							button.innerHTML = '<span>Ativar Auto-Renomeação</span>';
 						}
 					});
 
-					// Check subscription status periodically
+					// Function to check subscription status
 					async function checkSubscriptionStatus() {
 						try {
 							const response = await fetch('/subscription-status');
 							const data = await response.json();
-							const status = document.getElementById('subscription-status');
-							const button = document.getElementById('subscribe');
 							
+							const statusDiv = document.getElementById('subscription-status');
 							if (data.active) {
-								status.className = 'status active';
-								status.textContent = 'Auto-rename is active! New activities will be renamed automatically.';
-								button.style.display = 'none';
+								statusDiv.className = 'status active';
+								statusDiv.textContent = 'Auto-renomeação está ativa';
 							} else {
-								status.className = 'status inactive';
-								status.textContent = 'Auto-rename is currently inactive';
-								button.style.display = 'inline-block';
-								button.disabled = false;
-								button.textContent = 'Activate Auto-Rename';
+								statusDiv.className = 'status inactive';
+								statusDiv.textContent = 'Auto-renomeação está inativa';
 							}
 						} catch (error) {
-							console.error('Error checking subscription status:', error);
+							console.error('Error checking status:', error);
 						}
 					}
 
-					// Check status every minute
-					setInterval(checkSubscriptionStatus, 60000);
-					// Initial check
+					// Check status on page load
 					checkSubscriptionStatus();
 				</script>
 			</body>
 		</html>
-	`, tokens.AccessToken, tokens.AccessToken, tokens.AccessToken)
+	`, tokens.AccessToken)
 }
 
 func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Request) {
