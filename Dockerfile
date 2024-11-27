@@ -31,8 +31,9 @@ EXPOSE 8080
 # Run the server
 CMD ["/server"]
 
-# Create directory for static files
-RUN mkdir -p /app/static/favicon
+# Create directories
+RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates
 
-# Copy static files
-COPY static/ /app/static/ 
+# Copy static and template files
+COPY static/ /app/static/
+COPY templates/ /app/templates/

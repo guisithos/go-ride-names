@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - zoAtleta</title>
+        
+        <!-- Favicon -->
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+        <link rel="manifest" href="/static/site.webmanifest">
+        <meta name="theme-color" content="#FC4C02">
+        <link rel="stylesheet" href="/static/css/dashboard.css">
+    </head>
+    <body>
+        <div class="header">
+            <div class="header-left">
+                <img src="/static/zoaAtleta_logo.png" alt="zoAtleta Logo">
+                <div class="header-text">
+                    <h1>zoAtleta</h1>
+                    <div class="slogan">Seu treino, nossa piada</div>
+                </div>
+            </div>
+            <div class="buttons-container">
+                <button id="rename" class="btn">
+                    <span>Renomear Todas</span>
+                </button>
+                <button id="subscribe" class="btn">
+                    <span>Ativar Auto-Renomeação</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="subscription-status" class="status inactive">
+            Auto-renomeação está atualmente inativa
+        </div>
+
+        <div class="analytics-container" id="activity-stats">
+            <!-- Stats will be filled by JavaScript -->
+        </div>
+
+        <div class="activities-container">
+            <h2>Suas Atividades</h2>
+            <div id="activities-recent">
+                <!-- Recent 5 activities will be filled by JavaScript -->
+            </div>
+            
+            <div class="show-more">
+                <button class="show-more-btn" onclick="toggleMoreActivities()">
+                    Mostrar mais atividades
+                </button>
+            </div>
+            
+            <div id="activities-expanded" class="activities-expanded">
+                <!-- More activities will be filled by JavaScript -->
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Conectado com</p>
+            <img src="/static/api_logo_cptblWith_strava_horiz_gray.png" alt="Powered by Strava">
+        </div>
+
+        <script>
+            const accessToken = "{{.AccessToken}}";
+        </script>
+        <script src="/static/js/dashboard.js"></script>
+    </body>
+</html> 

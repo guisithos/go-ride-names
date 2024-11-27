@@ -3,5 +3,6 @@
 .env.local
 *.md
 /resources
-# Don't ignore static directory
-!static/ 
+# Don't ignore static and templates directories
+!static/
+!templates/ 
