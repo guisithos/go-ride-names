@@ -98,7 +98,7 @@ func (c *Client) RefreshToken() error {
 
 // handle automatic token refresh
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	// Add authorization header
+	// Add authorization headre
 	if c.accessToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
 	}

@@ -5,10 +5,25 @@ const activityIcons = {
     Swim: "🏊",
     Walk: "🚶",
     WeightTraining: "💪",
+    Workout: "💪",
     Yoga: "🧘",
     CrossFit: "🏋️",
     VirtualRide: "🎮",
 };
+
+// Define stationary activities that should show duration instead of distance
+const stationaryActivities = ['WeightTraining', 'Workout', 'Yoga', 'CrossFit'];
+
+// Format duration in seconds to hours and minutes
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+        return `${hours}h${minutes}min`;
+    }
+    return `${minutes}min`;
+}
 
 // Store activities for later use
 window.remainingActivities = [];
@@ -60,6 +75,7 @@ async function loadActivities() {
     }
 }
 
+// Update processActivitiesStats to handle both distance and duration
 function processActivitiesStats(activities) {
     const stats = {};
     
@@ -67,16 +83,19 @@ function processActivitiesStats(activities) {
         if (!stats[activity.type]) {
             stats[activity.type] = {
                 count: 0,
-                distance: 0
+                distance: 0,
+                duration: 0
             };
         }
         stats[activity.type].count++;
         stats[activity.type].distance += activity.distance;
+        stats[activity.type].duration += activity.moving_time; // Add duration tracking
     });
 
     return stats;
 }
 
+// Update displayStats to show either distance or duration based on activity type
 function displayStats(stats) {
     const container = document.getElementById('activity-stats');
     container.innerHTML = '';
@@ -84,16 +103,23 @@ function displayStats(stats) {
     Object.entries(stats).forEach(([type, data]) => {
         const div = document.createElement('div');
         div.className = 'activity-stat';
+        const isStationary = stationaryActivities.includes(type);
+        
         div.innerHTML = `
             <div class="icon">${activityIcons[type] || '🏃'}</div>
-            <div class="count">${data.count}</div>
-            <div class="type">${type}</div>
-            <div class="distance">${formatDistance(data.distance)}</div>
+            <div class="count">${data.count} ${type}</div>
+            <div class="metric">
+                ${isStationary 
+                    ? `Tempo: ${formatDuration(data.duration)}`
+                    : `Distância: ${formatDistance(data.distance)}`
+                }
+            </div>
         `;
         container.appendChild(div);
     });
 }
 
+// Update displayRecentActivities to show appropriate metrics
 function displayRecentActivities(activities) {
     const container = document.getElementById('activities-recent');
     container.innerHTML = '';
@@ -101,16 +127,22 @@ function displayRecentActivities(activities) {
     activities.forEach(activity => {
         const div = document.createElement('div');
         div.className = 'activity';
+        const isStationary = stationaryActivities.includes(activity.type);
+        
         div.innerHTML = `
             <h3>${activity.name}</h3>
             <p>Tipo: ${activity.type}</p>
-            <p>Distância: ${formatDistance(activity.distance)}</p>
+            ${isStationary 
+                ? `<p>Tempo: ${formatDuration(activity.moving_time)}</p>`
+                : `<p>Distância: ${formatDistance(activity.distance)}</p>`
+            }
             <p>Data: ${formatDate(activity.start_date_local)}</p>
         `;
         container.appendChild(div);
     });
 }
 
+// Update toggleMoreActivities to show appropriate metrics
 function toggleMoreActivities() {
     const expandedContainer = document.getElementById('activities-expanded');
     const button = document.querySelector('.show-more-btn');
@@ -126,10 +158,15 @@ function toggleMoreActivities() {
         window.remainingActivities.forEach(activity => {
             const div = document.createElement('div');
             div.className = 'activity';
+            const isStationary = stationaryActivities.includes(activity.type);
+            
             div.innerHTML = `
                 <h3>${activity.name}</h3>
                 <p>Tipo: ${activity.type}</p>
-                <p>Distância: ${formatDistance(activity.distance)}</p>
+                ${isStationary 
+                    ? `<p>Tempo: ${formatDuration(activity.moving_time)}</p>`
+                    : `<p>Distância: ${formatDistance(activity.distance)}</p>`
+                }
                 <p>Data: ${formatDate(activity.start_date_local)}</p>
             `;
             expandedContainer.appendChild(div);
