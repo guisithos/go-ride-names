@@ -267,49 +267,32 @@ async function checkSubscriptionStatus() {
         const response = await fetch('/subscription-status');
         const data = await response.json();
         
-        const statusDiv = document.getElementById('subscription-status');
-        const subscribeBtn = document.getElementById('subscribe');
-        const unsubscribeBtn = document.getElementById('unsubscribe');
+        const statusElement = document.getElementById('subscription-status');
+        const subscribeButton = document.getElementById('subscribe');
         
         if (data.active) {
-            statusDiv.className = 'status active';
-            statusDiv.textContent = 'Auto-renomeação está ativa';
-            subscribeBtn.style.display = 'none';
-            unsubscribeBtn.style.display = 'block';
+            statusElement.className = 'status active';
+            statusElement.innerHTML = `Auto-renomeação está ativa<br><small>Última verificação: ${new Date(data.lastCheck).toLocaleString()}</small>`;
+            subscribeButton.innerHTML = '<span>Desativar Auto-Renomeação</span>';
         } else {
-            statusDiv.className = 'status inactive';
-            statusDiv.textContent = 'Auto-renomeação está inativa';
-            subscribeBtn.style.display = 'block';
-            unsubscribeBtn.style.display = 'none';
+            statusElement.className = 'status inactive';
+            let message = 'Auto-renomeação está atualmente inativa';
+            if (data.error) {
+                message += `<br><small>Motivo: ${data.error}</small>`;
+            }
+            statusElement.innerHTML = message;
+            subscribeButton.innerHTML = '<span>Ativar Auto-Renomeação</span>';
         }
     } catch (error) {
-        console.error('Error checking status:', error);
+        console.error('Error checking subscription status:', error);
+        const statusElement = document.getElementById('subscription-status');
+        statusElement.className = 'status error';
+        statusElement.textContent = 'Erro ao verificar status da auto-renomeação';
     }
 }
 
-// Add unsubscribe button event listener
-document.getElementById('unsubscribe').addEventListener('click', async function() {
-    const button = this;
-    button.disabled = true;
-    button.innerHTML = '<span>Desativando...</span>';
-    
-    try {
-        const response = await fetch('/unsubscribe', {
-            method: 'POST'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to unsubscribe');
-        }
-
-        checkSubscriptionStatus();
-    } catch (error) {
-        console.error('Error:', error);
-    } finally {
-        button.disabled = false;
-        button.innerHTML = '<span>Desativar Auto-Renomeação</span>';
-    }
-});
+// Start periodic status checks
+setInterval(checkSubscriptionStatus, 60000); // Check every minute
 
 // Check status and load activities when page loads
 checkSubscriptionStatus();
