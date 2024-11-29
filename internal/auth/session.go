@@ -12,15 +12,15 @@ import (
 
 type SessionStore struct {
 	sync.RWMutex
-	tokens map[string]*TokenResponse
-	values map[string]interface{}
-	redis  *redis.Client
+	values       map[string]interface{}
+	redis        *redis.Client
+	tokenManager *TokenManager
 }
 
 func NewSessionStore(redisURL string) *SessionStore {
 	store := &SessionStore{
-		tokens: make(map[string]*TokenResponse),
-		values: make(map[string]interface{}),
+		values:       make(map[string]interface{}),
+		tokenManager: NewTokenManager(redisURL),
 	}
 
 	if redisURL != "" {
@@ -35,6 +35,9 @@ func NewSessionStore(redisURL string) *SessionStore {
 		if err := store.redis.Ping(context.Background()).Err(); err != nil {
 			log.Printf("Warning: Redis connection failed, falling back to memory store: %v", err)
 			store.redis = nil
+		} else {
+			// Start token expiration checker if Redis is available
+			store.tokenManager.StartExpirationChecker(5 * time.Minute)
 		}
 	}
 
@@ -42,62 +45,28 @@ func NewSessionStore(redisURL string) *SessionStore {
 }
 
 func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
-	s.Lock()
-	defer s.Unlock()
-
-	// Store in memory
-	s.tokens[userID] = tokens
-
-	// Store in Redis if available
-	if s.redis != nil {
-		data, err := json.Marshal(tokens)
-		if err != nil {
-			return err
-		}
-		return s.redis.Set(context.Background(), "tokens:"+userID, data, 24*time.Hour).Err()
-	}
-	return nil
+	return s.tokenManager.StoreTokens(userID, tokens)
 }
 
 func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
-	s.RLock()
-	defer s.RUnlock()
-
-	// Try Redis first i
-	if s.redis != nil {
-		data, err := s.redis.Get(context.Background(), "tokens:"+userID).Bytes()
-		if err == nil {
-			var tokens TokenResponse
-			if err := json.Unmarshal(data, &tokens); err == nil {
-				return &tokens, true
-			}
-		}
-	}
-
-	// Fallback to memory
-	tokens, exists := s.tokens[userID]
-	return tokens, exists
+	return s.tokenManager.GetTokens(userID)
 }
 
 func (s *SessionStore) Set(key string, value interface{}) error {
 	s.Lock()
 	defer s.Unlock()
 
-	// Store in Redis
+	// Store in Redis if available
 	if s.redis != nil {
 		data, err := json.Marshal(value)
 		if err != nil {
 			return err
 		}
-		return s.redis.Set(context.Background(), key, data, 24*time.Hour).Err()
+		return s.redis.Set(context.Background(), key, data, 60*24*time.Hour).Err() // Store for 60 days
 	}
 
-	// Store in memory based on value type
-	if tokenResp, ok := value.(*TokenResponse); ok {
-		s.tokens[key] = tokenResp
-	} else {
-		s.values[key] = value
-	}
+	// Store in memory
+	s.values[key] = value
 	return nil
 }
 
@@ -122,10 +91,28 @@ func (s *SessionStore) Get(key string) interface{} {
 	}
 
 	// Fallback to memory
-	// First check tokens map
-	if token, exists := s.tokens[key]; exists {
-		return token
-	}
-	// Then check values map
 	return s.values[key]
+}
+
+func (s *SessionStore) Delete(key string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	// Delete from Redis if available
+	if s.redis != nil {
+		if err := s.redis.Del(context.Background(), key).Err(); err != nil {
+			return err
+		}
+	}
+
+	// Delete from memory
+	delete(s.values, key)
+	return nil
+}
+
+func (s *SessionStore) Clear(userID string) error {
+	if err := s.tokenManager.DeleteTokens(userID); err != nil {
+		return err
+	}
+	return s.Delete("user:" + userID)
 }

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
@@ -19,11 +21,14 @@ const (
 )
 
 type Client struct {
-	accessToken  string
-	refreshToken string
-	clientID     string
-	clientSecret string
-	httpClient   *http.Client
+	accessToken    string
+	refreshToken   string
+	clientID       string
+	clientSecret   string
+	httpClient     *http.Client
+	tokenExpiresAt int64
+	onTokenRefresh func(TokenResponse) error
+	mu             sync.RWMutex
 }
 
 type TokenResponse struct {
@@ -54,7 +59,17 @@ func NewClient(accessToken, refreshToken, clientID, clientSecret string) *Client
 	}
 }
 
+// SetTokenRefreshCallback sets a callback function that will be called when tokens are refreshed
+func (c *Client) SetTokenRefreshCallback(callback func(TokenResponse) error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onTokenRefresh = callback
+}
+
 func (c *Client) RefreshToken() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	data := url.Values{}
 	data.Set("client_id", c.clientID)
 	data.Set("client_secret", c.clientSecret)
@@ -89,18 +104,42 @@ func (c *Client) RefreshToken() error {
 		return fmt.Errorf("received empty access token in response: %s", string(bodyBytes))
 	}
 
+	// Update client tokens
 	c.accessToken = tokenResp.AccessToken
 	if tokenResp.RefreshToken != "" {
 		c.refreshToken = tokenResp.RefreshToken
 	}
+	c.tokenExpiresAt = tokenResp.ExpiresAt
+
+	// Call the token refresh callback if set
+	if c.onTokenRefresh != nil {
+		if err := c.onTokenRefresh(tokenResp); err != nil {
+			log.Printf("Warning: Failed to execute token refresh callback: %v", err)
+		}
+	}
+
 	return nil
 }
 
-// handle automatic token refresh
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	// Add authorization headre
-	if c.accessToken != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+	c.mu.RLock()
+	accessToken := c.accessToken
+	expiresAt := c.tokenExpiresAt
+	c.mu.RUnlock()
+
+	// Check if token is expired or will expire soon
+	if expiresAt > 0 && time.Until(time.Unix(expiresAt, 0)) < 5*time.Minute {
+		if err := c.RefreshToken(); err != nil {
+			return nil, fmt.Errorf("token refresh failed: %v", err)
+		}
+		c.mu.RLock()
+		accessToken = c.accessToken
+		c.mu.RUnlock()
+	}
+
+	// Add authorization header
+	if accessToken != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -116,7 +155,10 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 		}
 
 		// Retry request with new token
+		c.mu.RLock()
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+		c.mu.RUnlock()
+
 		return c.httpClient.Do(req)
 	}
 

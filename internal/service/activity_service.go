@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
 	"time"
 
 	"github.com/guisithos/go-ride-names/internal/strava"
@@ -49,8 +48,8 @@ var defaultActivityNames = map[string]bool{
 }
 
 type ActivityService struct {
-	client              *strava.Client
-	webhookSubscription *strava.WebhookSubscription
+	client         *strava.Client
+	webhookManager *WebhookManager
 }
 
 func NewActivityService(client *strava.Client) *ActivityService {
@@ -131,58 +130,38 @@ func (s *ActivityService) ProcessNewActivity(activityID int64) error {
 	return nil
 }
 
+// InitializeWebhooks sets up the webhook manager with the provided callback URL and verify token
+func (s *ActivityService) InitializeWebhooks(callbackURL, verifyToken string) error {
+	s.webhookManager = NewWebhookManager(s.client, callbackURL, verifyToken)
+	return s.webhookManager.Start()
+}
+
+func (s *ActivityService) GetWebhookStatus() (bool, time.Time) {
+	if s.webhookManager == nil {
+		return false, time.Time{}
+	}
+	return s.webhookManager.GetStatus()
+}
+
 func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {
-	log.Printf("Checking existing webhook subscriptions...")
-
-	// First, list existing subscriptions
-	subscriptions, err := s.client.ListWebhookSubscriptions()
-	if err != nil {
-		log.Printf("Error listing subscriptions: %v", err)
-		// Continue anyway, as the error might be due to permissions
-	}
-
-	// Check if we already have a subscription with this callback URL
-	for _, sub := range subscriptions {
-		if sub.CallbackURL == callbackURL {
-			log.Printf("Found existing subscription with ID: %d", sub.ID)
-			s.webhookSubscription = &sub
-			return nil // Success - we're already subscribed
+	if s.webhookManager == nil {
+		if err := s.InitializeWebhooks(callbackURL, verifyToken); err != nil {
+			return fmt.Errorf("failed to initialize webhook manager: %v", err)
 		}
+		return nil
 	}
-
-	log.Printf("No existing subscription found, creating new one with callback URL: %s", callbackURL)
-
-	// Verify the callback URL is accessible
-	resp, err := http.Get(callbackURL)
-	if err != nil {
-		log.Printf("Warning: Callback URL may not be accessible: %v", err)
-	} else {
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMethodNotAllowed {
-			log.Printf("Warning: Callback URL returned status %d", resp.StatusCode)
-		}
-	}
-
-	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
-	if err != nil {
-		log.Printf("Error creating webhook subscription: %v", err)
-		return err
-	}
-
-	log.Printf("Successfully created webhook subscription: ID=%d", subscription.ID)
-	s.webhookSubscription = subscription
-	return nil
+	return s.webhookManager.ForceCheck()
 }
 
 func (s *ActivityService) UnsubscribeFromWebhooks() error {
-	if s.webhookSubscription == nil {
-		return nil // Already unsubscribed
+	if s.webhookManager == nil || s.webhookManager.subscription == nil {
+		return nil
 	}
 
-	if err := s.client.DeleteWebhookSubscription(s.webhookSubscription.ID); err != nil {
+	if err := s.client.DeleteWebhookSubscription(s.webhookManager.subscription.ID); err != nil {
 		return fmt.Errorf("error deleting webhook subscription: %v", err)
 	}
 
-	s.webhookSubscription = nil
+	s.webhookManager = nil
 	return nil
 }
