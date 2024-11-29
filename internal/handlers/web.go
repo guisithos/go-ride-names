@@ -45,6 +45,12 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if user is already authenticated
+	if tokens, exists := h.sessions.GetTokens("user"); exists && tokens.AccessToken != "" {
+		http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+		return
+	}
+
 	tmpl, err := template.ParseFiles(filepath.Join("templates", "home.html"))
 	if err != nil {
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
