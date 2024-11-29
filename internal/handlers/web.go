@@ -36,6 +36,7 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
 	mux.HandleFunc("/subscription-status", h.handleSubscriptionStatus)
+	mux.HandleFunc("/unsubscribe", h.handleUnsubscribe)
 }
 
 func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -212,4 +213,30 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	log.Printf("Subscription status check - Active: %v, Subscriptions: %d", active, len(subs))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
+}
+
+func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		log.Printf("Invalid method: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens("user")
+	if !exists {
+		log.Printf("No tokens found in session")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	activityService := service.NewActivityService(client)
+
+	if err := activityService.UnsubscribeFromWebhooks(); err != nil {
+		log.Printf("Error unsubscribing from webhooks: %v", err)
+		http.Error(w, "Failed to unsubscribe", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

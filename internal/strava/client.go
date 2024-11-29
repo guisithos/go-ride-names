@@ -38,8 +38,8 @@ type UpdateActivityRequest struct {
 }
 
 type WebhookSubscription struct {
-	ID            int    `json:"id"`
-	ApplicationID int    `json:"application_id"`
+	ID            int64  `json:"id"`
+	ApplicationID int64  `json:"application_id"`
 	CallbackURL   string `json:"callback_url"`
 	VerifyToken   string `json:"verify_token"`
 }
@@ -338,4 +338,30 @@ func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
 	}
 
 	return subscriptions, nil
+}
+
+func (c *Client) DeleteWebhookSubscription(subscriptionID int64) error {
+	url := fmt.Sprintf("https://www.strava.com/api/v3/push_subscriptions/%d", subscriptionID)
+
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	q := req.URL.Query()
+	q.Add("client_id", c.clientID)
+	q.Add("client_secret", c.clientSecret)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
 }
