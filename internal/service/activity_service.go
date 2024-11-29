@@ -41,6 +41,11 @@ var defaultActivityNames = map[string]bool{
 	"Lunch Yoga":                true,
 	"Evening Yoga":              true,
 	"Night Yoga":                true,
+	"Morning Workout":           true,
+	"Afternoon Workout":         true,
+	"Lunch Workout":             true,
+	"Evening Workout":           true,
+	"Night Workout":             true,
 }
 
 type ActivityService struct {
@@ -166,5 +171,18 @@ func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) e
 
 	log.Printf("Successfully created webhook subscription: ID=%d", subscription.ID)
 	s.webhookSubscription = subscription
+	return nil
+}
+
+func (s *ActivityService) UnsubscribeFromWebhooks() error {
+	if s.webhookSubscription == nil {
+		return nil // Already unsubscribed
+	}
+
+	if err := s.client.DeleteWebhookSubscription(s.webhookSubscription.ID); err != nil {
+		return fmt.Errorf("error deleting webhook subscription: %v", err)
+	}
+
+	s.webhookSubscription = nil
 	return nil
 }

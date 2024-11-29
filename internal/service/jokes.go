@@ -9,7 +9,6 @@ const (
 	Ride           = "Ride"
 	Swim           = "Swim"
 	Walk           = "Walk"
-	Workout        = "Workout"
 	WeightTraining = "WeightTraining"
 	Yoga           = "Yoga"
 
@@ -28,6 +27,7 @@ const (
 	Squash           = "Squash"
 	MountainBikeRide = "MountainBikeRide"
 	Canoeing         = "Canoeing"
+	Workout          = "Workout"
 
 	Default = "Default"
 )
