@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"log"
@@ -71,6 +72,14 @@ func (h *WebHandler) validateToken(tokens *auth.TokenResponse) bool {
 	return true
 }
 
+func (h *WebHandler) getSessionID(r *http.Request) string {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
 func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -78,36 +87,65 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user is already authenticated
-	if tokens, exists := h.sessions.GetTokens("user"); exists {
-		if h.validateToken(tokens) {
-			http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
-			return
+	sessionID := h.getSessionID(r)
+	if sessionID != "" {
+		if tokens, exists := h.sessions.GetTokens(sessionID); exists {
+			if h.validateToken(tokens) {
+				http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+				return
+			}
 		}
+		// Invalid session, clear cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:   "session_id",
+			Value:  "",
+			Path:   "/",
+			Domain: getDomain(r),
+			MaxAge: -1,
+		})
 	}
 
 	tmpl, err := template.ParseFiles(filepath.Join("templates", "home.html"))
 	if err != nil {
+		log.Printf("Error loading template: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, nil); err != nil {
+		log.Printf("Error executing template: %v", err)
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 		return
 	}
 }
 
 func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	tokens, exists := h.sessions.GetTokens("user")
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		log.Printf("No session ID found, redirecting to home")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens(sessionID)
 	if !exists || !h.validateToken(tokens) {
 		log.Printf("Invalid or expired tokens, redirecting to home")
+		// Clear invalid session
+		http.SetCookie(w, &http.Cookie{
+			Name:   "session_id",
+			Value:  "",
+			Path:   "/",
+			Domain: getDomain(r),
+			MaxAge: -1,
+		})
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
 	tmpl, err := template.ParseFiles(filepath.Join("templates", "dashboard.html"))
 	if err != nil {
+		log.Printf("Error loading dashboard template: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
 		return
 	}
@@ -122,9 +160,15 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
+		log.Printf("Error executing dashboard template: %v", err)
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 		return
 	}
+}
+
+func getDomain(r *http.Request) string {
+	host := r.Host
+	return strings.TrimPrefix(host, "www.")
 }
 
 func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +177,13 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens(sessionID)
 	if !exists || !h.validateToken(tokens) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -175,7 +225,14 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		log.Printf("No session ID found, unauthorized")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens(sessionID)
 	if !exists || !h.validateToken(tokens) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -212,7 +269,17 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		log.Printf("No session ID found, unauthorized")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active": false,
+			"error":  "No valid authentication tokens found",
+		})
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens(sessionID)
 	if !exists || !h.validateToken(tokens) {
 		log.Printf("No valid tokens found in session")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -247,7 +314,14 @@ func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
+	sessionID := h.getSessionID(r)
+	if sessionID == "" {
+		log.Printf("No session ID found, unauthorized")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, exists := h.sessions.GetTokens(sessionID)
 	if !exists || !h.validateToken(tokens) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)

@@ -1,10 +1,14 @@
 package auth
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/guisithos/go-ride-names/internal/config"
 )
@@ -60,18 +64,52 @@ func (h *OAuthHandler) handleAuth(w http.ResponseWriter, r *http.Request) {
 func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
+		log.Printf("Error: No code received from Strava")
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
 
 	tokenResp, err := exchangeCodeForToken(code, h.config)
 	if err != nil {
+		log.Printf("Error exchanging code for token: %v", err)
 		http.Error(w, fmt.Sprintf("Error exchanging code: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	h.sessions.SetTokens("user", tokenResp)
+	// Generate a unique session ID
+	sessionID := generateSessionID()
+
+	if err := h.sessions.SetTokens(sessionID, tokenResp); err != nil {
+		log.Printf("Error storing tokens: %v", err)
+		http.Error(w, "Error storing session", http.StatusInternalServerError)
+		return
+	}
+
+	// Set secure cookie with session ID
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionID,
+		Path:     "/",
+		Domain:   getDomain(r),
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 24 * 60 * 60, // 60 days
+	})
+
+	log.Printf("Successfully authenticated user, redirecting to dashboard")
 	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+}
+
+func generateSessionID() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func getDomain(r *http.Request) string {
+	host := r.Host
+	return strings.TrimPrefix(host, "www.")
 }
 
 func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, error) {
