@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
@@ -11,6 +16,11 @@ import (
 )
 
 func main() {
+	// Configure logging
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.Printf("Starting application...")
+
+	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
@@ -18,7 +28,10 @@ func main() {
 
 	// Create shared components with Redis
 	redisURL := os.Getenv("REDIS_URL")
+	log.Printf("Redis URL: %s", redisURL)
 	sessions := auth.NewSessionStore(redisURL)
+
+	// Create router
 	mux := http.NewServeMux()
 
 	// Setup OAuth handler with configured redirect URI
@@ -37,11 +50,52 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	// Start server
+	// Configure server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Starting server on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+	addr := fmt.Sprintf(":%s", port)
+
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Channel to listen for errors coming from the listener.
+	serverErrors := make(chan error, 1)
+
+	// Start the service listening for requests.
+	go func() {
+		log.Printf("Server listening on %s", addr)
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	// Channel to listen for an interrupt or terminate signal from the OS.
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+
+	// Blocking main and waiting for shutdown.
+	select {
+	case err := <-serverErrors:
+		log.Fatalf("Error starting server: %v", err)
+
+	case <-shutdown:
+		log.Println("Starting shutdown...")
+
+		// Give outstanding requests a deadline for completion.
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		// Asking listener to shut down and shed load.
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Graceful shutdown did not complete in %v: %v", 15*time.Second, err)
+			if err := server.Close(); err != nil {
+				log.Printf("Error killing server: %v", err)
+			}
+		}
+	}
 }
