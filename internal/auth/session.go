@@ -58,14 +58,22 @@ func (s *SessionStore) Set(key string, value interface{}) error {
 
 	// Store in Redis if available
 	if s.redis != nil {
+		log.Printf("Attempting to store in Redis: %s", key)
 		data, err := json.Marshal(value)
 		if err != nil {
+			log.Printf("Error marshaling data for Redis: %v", err)
 			return err
 		}
-		return s.redis.Set(context.Background(), key, data, 60*24*time.Hour).Err() // Store for 60 days
+		if err := s.redis.Set(context.Background(), key, data, 60*24*time.Hour).Err(); err != nil {
+			log.Printf("Error storing in Redis: %v", err)
+			return err
+		}
+		log.Printf("Successfully stored data in Redis for key: %s", key)
+		return nil
 	}
 
 	// Store in memory
+	log.Printf("Storing in memory: %s", key)
 	s.values[key] = value
 	return nil
 }
@@ -76,21 +84,24 @@ func (s *SessionStore) Get(key string) interface{} {
 
 	// Try Redis first
 	if s.redis != nil {
+		log.Printf("Attempting to retrieve key from Redis: %s", key)
 		data, err := s.redis.Get(context.Background(), key).Bytes()
-		if err == nil {
+		if err != nil {
+			if err != redis.Nil {
+				log.Printf("Error retrieving from Redis: %v", err)
+			}
+		} else {
 			var value interface{}
 			if err := json.Unmarshal(data, &value); err == nil {
+				log.Printf("Successfully retrieved and unmarshaled data from Redis for key: %s", key)
 				return value
 			}
-			// Try as boolean
-			var boolValue bool
-			if err := json.Unmarshal(data, &boolValue); err == nil {
-				return boolValue
-			}
+			log.Printf("Error unmarshaling Redis data: %v", err)
 		}
 	}
 
 	// Fallback to memory
+	log.Printf("Falling back to memory store for key: %s", key)
 	return s.values[key]
 }
 

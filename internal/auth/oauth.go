@@ -78,6 +78,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Generate a unique session ID
 	sessionID := generateSessionID()
+	log.Printf("Generated session ID: %s", sessionID)
 
 	if err := h.sessions.SetTokens(sessionID, tokenResp); err != nil {
 		log.Printf("Error storing tokens: %v", err)
@@ -85,20 +86,19 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set secure cookie with session ID
+	// Set cookie without explicit domain to use the current domain
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
 		Path:     "/",
-		Domain:   getDomain(r),
 		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   60 * 24 * 60 * 60, // 60 days
 	})
 
-	log.Printf("Successfully authenticated user, redirecting to dashboard")
-	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
+	log.Printf("Successfully set session cookie and stored tokens, redirecting to dashboard")
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther) // Using StatusSeeOther for POST-redirect-GET
 }
 
 func generateSessionID() string {
