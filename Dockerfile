@@ -10,6 +10,7 @@ ENV GO111MODULE=on
 ENV GOSUMDB=sum.golang.org
 ENV GODEBUG=netdns=go
 ENV DNS_RESOLVER=8.8.8.8
+ENV PORT=8080
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -19,8 +20,13 @@ RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf && \
     for i in $(seq 1 3); do go mod download && break || sleep 5; done
 
-# Copy the source code
+# Create directories first
+RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates
+
+# Copy the source code and static files
 COPY . .
+COPY static/ /app/static/
+COPY templates/ /app/templates/
 
 # Build the application
 RUN go build -o /server ./cmd/main.go
@@ -28,12 +34,5 @@ RUN go build -o /server ./cmd/main.go
 # Expose port 8080
 EXPOSE 8080
 
-# Run the server
-CMD ["/server"]
-
-# Create directories
-RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates
-
-# Copy static and template files
-COPY static/ /app/static/
-COPY templates/ /app/templates/
+# Set the entrypoint
+ENTRYPOINT ["/server"]
