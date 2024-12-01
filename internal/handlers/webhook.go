@@ -97,10 +97,18 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if event.ObjectType == "activity" && event.AspectType == "create" {
 			log.Printf("Processing new activity: ID=%d", event.ObjectID)
 
-			// Get tokens from session
-			tokens, exists := h.sessions.GetTokens("user")
+			// Get session ID from cookie
+			cookie, err := r.Cookie("session_id")
+			if err != nil {
+				log.Printf("No session cookie found for processing activity %d", event.ObjectID)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			// Get tokens using the session ID from cookie
+			tokens, exists := h.sessions.GetTokens(cookie.Value)
 			if !exists {
-				log.Printf("No tokens found in session for processing activity %d", event.ObjectID)
+				log.Printf("No tokens found for session %s when processing activity %d", cookie.Value, event.ObjectID)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

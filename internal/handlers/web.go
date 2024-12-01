@@ -54,7 +54,7 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/unsubscribe", h.handleUnsubscribe)
 }
 
-func (h *WebHandler) validateToken(tokens *auth.TokenResponse) bool {
+func (h *WebHandler) validateToken(tokens *auth.TokenResponse, r *http.Request) bool {
 	if tokens == nil || tokens.AccessToken == "" {
 		return false
 	}
@@ -62,7 +62,7 @@ func (h *WebHandler) validateToken(tokens *auth.TokenResponse) bool {
 	// Check if token is expired
 	if time.Now().Unix() >= tokens.ExpiresAt {
 		// Try to refresh the token
-		client := h.createStravaClient(tokens)
+		client := h.createStravaClient(tokens, r)
 		if err := client.RefreshToken(); err != nil {
 			log.Printf("Failed to refresh token: %v", err)
 			return false
@@ -90,7 +90,7 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 	sessionID := h.getSessionID(r)
 	if sessionID != "" {
 		if tokens, exists := h.sessions.GetTokens(sessionID); exists {
-			if h.validateToken(tokens) {
+			if h.validateToken(tokens, r) {
 				http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
 				return
 			}
@@ -129,7 +129,7 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokens, exists := h.sessions.GetTokens(sessionID)
-	if !exists || !h.validateToken(tokens) {
+	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("Invalid or expired tokens, redirecting to home")
 		// Clear invalid session
 		http.SetCookie(w, &http.Cookie{
@@ -184,12 +184,12 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	}
 
 	tokens, exists := h.sessions.GetTokens(sessionID)
-	if !exists || !h.validateToken(tokens) {
+	if !exists || !h.validateToken(tokens, r) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	client := h.createStravaClient(tokens)
+	client := h.createStravaClient(tokens, r)
 	activityService := service.NewActivityService(client)
 
 	_, err := activityService.ListActivities(1, 30, 0, 0, true)
@@ -201,13 +201,16 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *WebHandler) createStravaClient(tokens *auth.TokenResponse) *strava.Client {
+func (h *WebHandler) createStravaClient(tokens *auth.TokenResponse, r *http.Request) *strava.Client {
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 
-	// Set up token refresh callback
+	// Get the current session ID
+	sessionID := h.getSessionID(r)
+
+	// Set up token refresh callback with the correct session ID
 	client.SetTokenRefreshCallback(func(newTokens strava.TokenResponse) error {
-		return h.sessions.SetTokens("user", &auth.TokenResponse{
+		return h.sessions.SetTokens(sessionID, &auth.TokenResponse{
 			TokenType:    newTokens.TokenType,
 			AccessToken:  newTokens.AccessToken,
 			RefreshToken: newTokens.RefreshToken,
@@ -233,7 +236,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokens, exists := h.sessions.GetTokens(sessionID)
-	if !exists || !h.validateToken(tokens) {
+	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -247,7 +250,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	callbackURL := baseURL + "/webhook"
 	log.Printf("Subscription attempt - Base URL: %s, Callback URL: %s", baseURL, callbackURL)
 
-	client := h.createStravaClient(tokens)
+	client := h.createStravaClient(tokens, r)
 	activityService := service.NewActivityService(client)
 
 	err := activityService.SubscribeToWebhooks(callbackURL, h.verifyToken)
@@ -280,7 +283,7 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	tokens, exists := h.sessions.GetTokens(sessionID)
-	if !exists || !h.validateToken(tokens) {
+	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"active": false,
@@ -289,7 +292,7 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	client := h.createStravaClient(tokens)
+	client := h.createStravaClient(tokens, r)
 	activityService := service.NewActivityService(client)
 
 	active, lastCheck := activityService.GetWebhookStatus()
@@ -322,13 +325,13 @@ func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokens, exists := h.sessions.GetTokens(sessionID)
-	if !exists || !h.validateToken(tokens) {
+	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	client := h.createStravaClient(tokens)
+	client := h.createStravaClient(tokens, r)
 	activityService := service.NewActivityService(client)
 
 	if err := activityService.UnsubscribeFromWebhooks(); err != nil {
