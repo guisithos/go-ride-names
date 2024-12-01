@@ -91,29 +91,38 @@ func (tm *TokenManager) GetTokens(userID string) (*TokenResponse, bool) {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
+	log.Printf("Getting tokens for user ID: %s", userID)
+
 	if tm.redis != nil {
 		// Try to get tokens from Redis
 		data, err := tm.redis.Get(context.Background(), fmt.Sprintf("tokens:%s", userID)).Bytes()
 		if err == nil {
 			var tokens TokenResponse
 			if err := json.Unmarshal(data, &tokens); err == nil {
-				// Check if token needs refresh
-				if time.Until(time.Unix(tokens.ExpiresAt, 0)) < tokenExpirationBuffer {
-					return &tokens, false // Indicate token needs refresh
+				log.Printf("Found tokens in Redis for user %s, expires at %d", userID, tokens.ExpiresAt)
+				// Only return false if token is actually expired
+				if time.Now().Unix() >= tokens.ExpiresAt {
+					log.Printf("Token is expired for user %s", userID)
+					return &tokens, false
 				}
 				return &tokens, true
 			}
+			log.Printf("Error unmarshaling tokens: %v", err)
+		} else {
+			log.Printf("Error getting tokens from Redis: %v", err)
 		}
 	}
 
-	// If we have a refresh token in memory, return a TokenResponse indicating refresh needed
+	// If we have a refresh token in memory, return it
 	if refreshToken, exists := tm.refreshTokens[userID]; exists {
+		log.Printf("Found refresh token in memory for user %s", userID)
 		return &TokenResponse{
 			RefreshToken: refreshToken,
 			ExpiresAt:    time.Now().Unix(), // Expired token to force refresh
 		}, false
 	}
 
+	log.Printf("No tokens found for user %s", userID)
 	return nil, false
 }
 

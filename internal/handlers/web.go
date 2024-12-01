@@ -56,19 +56,32 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *WebHandler) validateToken(tokens *auth.TokenResponse, r *http.Request) bool {
 	if tokens == nil || tokens.AccessToken == "" {
+		log.Printf("Tokens are nil or access token is empty")
 		return false
 	}
 
 	// Check if token is expired
 	if time.Now().Unix() >= tokens.ExpiresAt {
-		// Try to refresh the token
+		log.Printf("Token is expired, attempting to refresh")
 		client := h.createStravaClient(tokens, r)
 		if err := client.RefreshToken(); err != nil {
 			log.Printf("Failed to refresh token: %v", err)
 			return false
 		}
+
+		// Get the refreshed tokens
+		sessionID := h.getSessionID(r)
+		if refreshedTokens, exists := h.sessions.GetTokens(sessionID); exists {
+			log.Printf("Successfully refreshed tokens")
+			// Update the passed tokens with the refreshed values
+			*tokens = *refreshedTokens
+			return true
+		}
+		log.Printf("Could not find refreshed tokens in session")
+		return false
 	}
 
+	log.Printf("Token is valid")
 	return true
 }
 
