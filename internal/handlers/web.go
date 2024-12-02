@@ -223,6 +223,9 @@ func (h *WebHandler) createStravaClient(tokens *auth.TokenResponse, r *http.Requ
 			AccessToken:  newTokens.AccessToken,
 			RefreshToken: newTokens.RefreshToken,
 			ExpiresAt:    newTokens.ExpiresAt,
+			Athlete: auth.Athlete{
+				ID: newTokens.GetAthleteID(),
+			},
 		})
 	})
 

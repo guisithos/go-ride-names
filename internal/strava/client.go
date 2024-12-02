@@ -32,11 +32,11 @@ type Client struct {
 }
 
 type TokenResponse struct {
-	TokenType    string `json:"token_type"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
-	AthleteID    int64  `json:"athlete.id"`
+	TokenType    string  `json:"token_type"`
+	AccessToken  string  `json:"access_token"`
+	RefreshToken string  `json:"refresh_token"`
+	ExpiresAt    int64   `json:"expires_at"`
+	Athlete      Athlete `json:"athlete"`
 }
 
 type UpdateActivityRequest struct {
@@ -407,4 +407,8 @@ func (c *Client) DeleteWebhookSubscription(subscriptionID int64) error {
 	}
 
 	return nil
+}
+
+func (t *TokenResponse) GetAthleteID() int64 {
+	return t.Athlete.ID
 }

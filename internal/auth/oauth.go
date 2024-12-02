@@ -104,36 +104,36 @@ func (h *OAuthHandler) handleAuth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
-	log.Printf("=== START CALLBACK HANDLING ===")
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		log.Printf("Error: No code received from Strava")
+		log.Printf(`{"error": "No code received from Strava"}`)
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Got authorization code: %s", code)
+	log.Printf(`{"message": "Received callback from Strava", "code": "%s"}`, code)
 
 	tokenResp, err := exchangeCodeForToken(code, h.config)
 	if err != nil {
-		log.Printf("Error exchanging code for token: %v", err)
+		log.Printf(`{"error": "Failed to exchange code for token", "details": "%v"}`, err)
 		http.Error(w, fmt.Sprintf("Error exchanging code: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	athleteID := tokenResp.GetAthleteID()
-	log.Printf("Got athlete ID: %d from response", athleteID)
+	log.Printf(`{"message": "Got athlete ID", "id": %d}`, athleteID)
+
 	if athleteID == 0 {
-		log.Printf("Error: No athlete ID in token response. Full response: %+v", tokenResp)
+		log.Printf(`{"error": "No athlete ID in token response", "response": %+v}`, tokenResp)
 		http.Error(w, "Invalid token response", http.StatusInternalServerError)
 		return
 	}
 
 	// Use athlete ID as the session ID
 	sessionID := fmt.Sprintf("%d", athleteID)
-	log.Printf("Using athlete ID as session ID: %s", sessionID)
+	log.Printf(`{"message": "Using athlete ID as session ID", "session_id": "%s"}`, sessionID)
 
 	if err := h.sessions.SetTokens(sessionID, tokenResp); err != nil {
-		log.Printf("Error storing tokens: %v", err)
+		log.Printf(`{"error": "Failed to store tokens", "details": "%v"}`, err)
 		http.Error(w, "Error storing session", http.StatusInternalServerError)
 		return
 	}
@@ -149,8 +149,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   60 * 24 * 60 * 60, // 60 days
 	})
 
-	log.Printf("Successfully set session cookie and stored tokens, redirecting to dashboard")
-	log.Printf("=== END CALLBACK HANDLING ===")
+	log.Printf(`{"message": "Successfully completed callback handling", "session_id": "%s"}`, sessionID)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
@@ -166,48 +165,41 @@ func getDomain(r *http.Request) string {
 }
 
 func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, error) {
-	log.Printf("=== START TOKEN EXCHANGE ===")
+	log.Printf(`{"message": "Starting token exchange", "code": "%s", "client_id": "%s"}`, code, config.ClientID)
+
 	data := url.Values{}
 	data.Set("client_id", config.ClientID)
 	data.Set("client_secret", config.ClientSecret)
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
 
-	log.Printf("Sending request to Strava with client_id=%s and code=%s", config.ClientID, code)
 	resp, err := http.PostForm(TokenURL, data)
 	if err != nil {
-		log.Printf("Error making request to Strava: %v", err)
+		log.Printf(`{"error": "Failed to make request to Strava", "details": "%v"}`, err)
 		return nil, fmt.Errorf("failed to make request to Strava: %v", err)
 	}
 	defer resp.Body.Close()
 
-	log.Printf("Got response from Strava with status: %d", resp.StatusCode)
+	log.Printf(`{"message": "Got response from Strava", "status": %d}`, resp.StatusCode)
 
 	// Read the raw response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Error reading response body: %v", err)
+		log.Printf(`{"error": "Failed to read response body", "details": "%v"}`, err)
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
 
-	log.Printf("Raw response from Strava: %s", string(body))
-
-	// Try to parse as a map first to debug
-	var rawResponse map[string]interface{}
-	if err := json.Unmarshal(body, &rawResponse); err != nil {
-		log.Printf("Error parsing raw response as map: %v", err)
-	} else {
-		log.Printf("Response as map: %+v", rawResponse)
-	}
+	log.Printf(`{"message": "Raw response from Strava", "response": %s}`, string(body))
 
 	var tokenResp TokenResponse
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		log.Printf("Error parsing token response: %v", err)
+		log.Printf(`{"error": "Failed to parse token response", "details": "%v", "body": %s}`, err, string(body))
 		return nil, fmt.Errorf("error parsing response: %v, body: %s", err, string(body))
 	}
 
-	log.Printf("Successfully parsed token response: %+v", tokenResp)
-	log.Printf("=== END TOKEN EXCHANGE ===")
+	log.Printf(`{"message": "Successfully parsed token response", "token_type": "%s", "athlete": %+v}`,
+		tokenResp.TokenType, tokenResp.Athlete)
+
 	return &tokenResp, nil
 }
 
