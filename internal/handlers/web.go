@@ -46,7 +46,7 @@ func NewWebHandler(sessions *auth.SessionStore, oauthConfig *auth.OAuth2Config, 
 }
 
 func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", h.handleHome)
+	mux.HandleFunc("/", h.HandleHome)
 	mux.HandleFunc("/dashboard", h.handleDashboard)
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
@@ -93,7 +93,8 @@ func (h *WebHandler) getSessionID(r *http.Request) string {
 	return cookie.Value
 }
 
-func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
+// HandleHome handles the root path and displays the home page
+func (h *WebHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
