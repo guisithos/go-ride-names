@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -103,12 +104,14 @@ func (h *OAuthHandler) handleAuth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received callback from Strava")
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		log.Printf("Error: No code received from Strava")
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
+	log.Printf("Got authorization code: %s", code)
 
 	tokenResp, err := exchangeCodeForToken(code, h.config)
 	if err != nil {
@@ -118,6 +121,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	athleteID := tokenResp.GetAthleteID()
+	log.Printf("Got athlete ID: %d from response", athleteID)
 	if athleteID == 0 {
 		log.Printf("Error: No athlete ID in token response. Raw response: %+v", tokenResp)
 		http.Error(w, "Invalid token response", http.StatusInternalServerError)
@@ -167,17 +171,26 @@ func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, er
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
 
+	log.Printf("Exchanging code for token with data: %+v", data)
 	resp, err := http.PostForm(TokenURL, data)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	// Read the raw response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+	log.Printf("Raw response from Strava: %s", string(body))
+
 	var tokenResp TokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return nil, fmt.Errorf("error parsing response: %v, body: %s", err, string(body))
 	}
 
+	log.Printf("Parsed token response: %+v", tokenResp)
 	return &tokenResp, nil
 }
 
