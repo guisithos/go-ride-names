@@ -50,17 +50,6 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	// Add catch-all handler for unknown paths
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Only handle unknown paths
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		// Let the home handler deal with the root path
-		webHandler.HandleHome(w, r)
-	})
-
 	// Configure server
 	port := os.Getenv("PORT")
 	if port == "" {
