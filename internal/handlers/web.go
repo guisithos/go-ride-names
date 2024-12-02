@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"log"
@@ -72,7 +71,7 @@ func (h *WebHandler) validateToken(tokens *auth.TokenResponse, r *http.Request) 
 
 		// Get the refreshed tokens
 		sessionID := h.getSessionID(r)
-		if refreshedTokens, exists := h.sessions.GetTokens(sessionID); exists {
+		if refreshedTokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig); exists {
 			log.Printf("Successfully refreshed tokens")
 			// Update the passed tokens with the refreshed values
 			*tokens = *refreshedTokens
@@ -105,7 +104,7 @@ func (h *WebHandler) handleRoot(w http.ResponseWriter, r *http.Request) {
 	// Handle root path
 	sessionID := h.getSessionID(r)
 	if sessionID != "" {
-		if tokens, exists := h.sessions.GetTokens(sessionID); exists {
+		if tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig); exists {
 			if h.validateToken(tokens, r) {
 				http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
 				return
@@ -116,7 +115,6 @@ func (h *WebHandler) handleRoot(w http.ResponseWriter, r *http.Request) {
 			Name:   "session_id",
 			Value:  "",
 			Path:   "/",
-			Domain: getDomain(r),
 			MaxAge: -1,
 		})
 	}
@@ -144,7 +142,7 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens(sessionID)
+	tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig)
 	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("Invalid or expired tokens, redirecting to home")
 		// Clear invalid session
@@ -152,7 +150,6 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			Name:   "session_id",
 			Value:  "",
 			Path:   "/",
-			Domain: getDomain(r),
 			MaxAge: -1,
 		})
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -182,11 +179,6 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getDomain(r *http.Request) string {
-	host := r.Host
-	return strings.TrimPrefix(host, "www.")
-}
-
 func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -199,7 +191,7 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens(sessionID)
+	tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig)
 	if !exists || !h.validateToken(tokens, r) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -251,7 +243,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens(sessionID)
+	tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig)
 	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -298,7 +290,7 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens(sessionID)
+	tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig)
 	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -340,7 +332,7 @@ func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens(sessionID)
+	tokens, exists := h.sessions.GetTokens(sessionID, h.oauthConfig)
 	if !exists || !h.validateToken(tokens, r) {
 		log.Printf("No valid tokens found in session")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)

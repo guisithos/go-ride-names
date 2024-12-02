@@ -12,6 +12,9 @@ ENV GODEBUG=netdns=go
 ENV DNS_RESOLVER=8.8.8.8
 ENV PORT=8080
 
+# Create a volume for token storage
+VOLUME ["/app/tokens"]
+
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
@@ -21,7 +24,8 @@ RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf && \
     for i in $(seq 1 3); do go mod download && break || sleep 5; done
 
 # Create directories first
-RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates
+RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates /app/tokens && \
+    chmod 755 /app/tokens
 
 # Copy the source code and static files
 COPY . .

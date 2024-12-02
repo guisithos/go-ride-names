@@ -1,129 +1,104 @@
 package auth
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
-	"time"
-
-	"github.com/go-redis/redis/v8"
 )
 
 type SessionStore struct {
 	sync.RWMutex
-	values       map[string]interface{}
-	redis        *redis.Client
-	tokenManager *TokenManager
+	tokenDir string
 }
 
 func NewSessionStore(redisURL string) *SessionStore {
-	store := &SessionStore{
-		values:       make(map[string]interface{}),
-		tokenManager: NewTokenManager(redisURL),
+	// Create tokens directory if it doesn't exist
+	tokenDir := "tokens"
+	if err := os.MkdirAll(tokenDir, 0755); err != nil {
+		log.Printf("Warning: Could not create tokens directory: %v", err)
 	}
 
-	if redisURL != "" {
-		opt, err := redis.ParseURL(redisURL)
-		if err != nil {
-			log.Printf("Warning: Redis URL invalid, falling back to memory store: %v", err)
-			return store
-		}
-
-		store.redis = redis.NewClient(opt)
-		// Test the connection
-		if err := store.redis.Ping(context.Background()).Err(); err != nil {
-			log.Printf("Warning: Redis connection failed, falling back to memory store: %v", err)
-			store.redis = nil
-		} else {
-			// Start token expiration checker if Redis is available
-			store.tokenManager.StartExpirationChecker(5 * time.Minute)
-		}
+	return &SessionStore{
+		tokenDir: tokenDir,
 	}
-
-	return store
 }
 
 func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
-	return s.tokenManager.StoreTokens(userID, tokens)
-}
-
-func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
-	return s.tokenManager.GetTokens(userID)
-}
-
-func (s *SessionStore) Set(key string, value interface{}) error {
 	s.Lock()
 	defer s.Unlock()
 
-	// Store in Redis if available
-	if s.redis != nil {
-		log.Printf("Attempting to store in Redis: %s", key)
-		data, err := json.Marshal(value)
-		if err != nil {
-			log.Printf("Error marshaling data for Redis: %v", err)
-			return err
-		}
-		if err := s.redis.Set(context.Background(), key, data, 60*24*time.Hour).Err(); err != nil {
-			log.Printf("Error storing in Redis: %v", err)
-			return err
-		}
-		log.Printf("Successfully stored data in Redis for key: %s", key)
-		return nil
+	// Create file path
+	filePath := filepath.Join(s.tokenDir, fmt.Sprintf("%s.json", userID))
+
+	// Marshal tokens to JSON
+	data, err := json.Marshal(tokens)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tokens: %v", err)
 	}
 
-	// Store in memory
-	log.Printf("Storing in memory: %s", key)
-	s.values[key] = value
+	// Write to file
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write tokens file: %v", err)
+	}
+
+	log.Printf("Successfully stored tokens for user %s", userID)
 	return nil
 }
 
-func (s *SessionStore) Get(key string) interface{} {
+func (s *SessionStore) GetTokens(userID string, config *OAuth2Config) (*TokenResponse, bool) {
 	s.RLock()
 	defer s.RUnlock()
 
-	// Try Redis first
-	if s.redis != nil {
-		log.Printf("Attempting to retrieve key from Redis: %s", key)
-		data, err := s.redis.Get(context.Background(), key).Bytes()
-		if err != nil {
-			if err != redis.Nil {
-				log.Printf("Error retrieving from Redis: %v", err)
-			}
-		} else {
-			var value interface{}
-			if err := json.Unmarshal(data, &value); err == nil {
-				log.Printf("Successfully retrieved and unmarshaled data from Redis for key: %s", key)
-				return value
-			}
-			log.Printf("Error unmarshaling Redis data: %v", err)
+	// Read file
+	filePath := filepath.Join(s.tokenDir, fmt.Sprintf("%s.json", userID))
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("Error reading tokens file: %v", err)
 		}
+		return nil, false
 	}
 
-	// Fallback to memory
-	log.Printf("Falling back to memory store for key: %s", key)
-	return s.values[key]
+	// Unmarshal tokens
+	var tokens TokenResponse
+	if err := json.Unmarshal(data, &tokens); err != nil {
+		log.Printf("Error unmarshaling tokens: %v", err)
+		return nil, false
+	}
+
+	// Check if token is expired
+	if tokens.IsExpired() {
+		log.Printf("Token expired for user %s, attempting refresh", userID)
+		if err := tokens.Refresh(config); err != nil {
+			log.Printf("Error refreshing token: %v", err)
+			return nil, false
+		}
+
+		// Save refreshed tokens
+		if err := s.SetTokens(userID, &tokens); err != nil {
+			log.Printf("Error saving refreshed tokens: %v", err)
+			return nil, false
+		}
+		log.Printf("Successfully refreshed and saved tokens for user %s", userID)
+	}
+
+	return &tokens, true
 }
 
 func (s *SessionStore) Delete(key string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	// Delete from Redis if available
-	if s.redis != nil {
-		if err := s.redis.Del(context.Background(), key).Err(); err != nil {
-			return err
-		}
+	filePath := filepath.Join(s.tokenDir, fmt.Sprintf("%s.json", key))
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return err
 	}
-
-	// Delete from memory
-	delete(s.values, key)
 	return nil
 }
 
 func (s *SessionStore) Clear(userID string) error {
-	if err := s.tokenManager.DeleteTokens(userID); err != nil {
-		return err
-	}
-	return s.Delete("user:" + userID)
+	return s.Delete(userID)
 }
