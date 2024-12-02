@@ -26,11 +26,15 @@ type OAuth2Config struct {
 }
 
 type TokenResponse struct {
-	TokenType    string `json:"token_type"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
-	AthleteID    int64  `json:"athlete.id"`
+	TokenType    string  `json:"token_type"`
+	AccessToken  string  `json:"access_token"`
+	RefreshToken string  `json:"refresh_token"`
+	ExpiresAt    int64   `json:"expires_at"`
+	Athlete      Athlete `json:"athlete"`
+}
+
+type Athlete struct {
+	ID int64 `json:"id"`
 }
 
 func (t *TokenResponse) IsExpired() bool {
@@ -62,6 +66,10 @@ func (t *TokenResponse) Refresh(config *OAuth2Config) error {
 	}
 
 	return nil
+}
+
+func (t *TokenResponse) GetAthleteID() int64 {
+	return t.Athlete.ID
 }
 
 type OAuthHandler struct {
@@ -109,14 +117,15 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tokenResp.AthleteID == 0 {
-		log.Printf("Error: No athlete ID in token response")
+	athleteID := tokenResp.GetAthleteID()
+	if athleteID == 0 {
+		log.Printf("Error: No athlete ID in token response. Raw response: %+v", tokenResp)
 		http.Error(w, "Invalid token response", http.StatusInternalServerError)
 		return
 	}
 
 	// Use athlete ID as the session ID
-	sessionID := fmt.Sprintf("%d", tokenResp.AthleteID)
+	sessionID := fmt.Sprintf("%d", athleteID)
 	log.Printf("Using athlete ID as session ID: %s", sessionID)
 
 	if err := h.sessions.SetTokens(sessionID, tokenResp); err != nil {
