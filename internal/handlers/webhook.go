@@ -99,12 +99,14 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Processing new activity: ID=%d", event.ObjectID)
 
 			// Get tokens for the activity owner using the owner_id
-			tokens, exists := h.sessions.GetTokens(fmt.Sprintf("%d", event.OwnerID), &auth.OAuth2Config{
+			ownerID := fmt.Sprintf("%d", event.OwnerID)
+			log.Printf("Looking for tokens for owner ID: %s", ownerID)
+			tokens, exists := h.sessions.GetTokens(ownerID, &auth.OAuth2Config{
 				ClientID:     h.stravaConfig.StravaClientID,
 				ClientSecret: h.stravaConfig.StravaClientSecret,
 			})
 			if !exists {
-				log.Printf("No tokens found for owner %d when processing activity %d", event.OwnerID, event.ObjectID)
+				log.Printf("No tokens found for owner %s when processing activity %d", ownerID, event.ObjectID)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
