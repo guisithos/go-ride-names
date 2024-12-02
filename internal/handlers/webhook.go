@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -97,18 +98,10 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if event.ObjectType == "activity" && event.AspectType == "create" {
 			log.Printf("Processing new activity: ID=%d", event.ObjectID)
 
-			// Get session ID from cookie
-			cookie, err := r.Cookie("session_id")
-			if err != nil {
-				log.Printf("No session cookie found for processing activity %d", event.ObjectID)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			// Get tokens using the session ID from cookie
-			tokens, exists := h.sessions.GetTokens(cookie.Value)
+			// Get tokens for the activity owner using the owner_id
+			tokens, exists := h.sessions.GetTokens(fmt.Sprintf("%d", event.OwnerID))
 			if !exists {
-				log.Printf("No tokens found for session %s when processing activity %d", cookie.Value, event.ObjectID)
+				log.Printf("No tokens found for owner %d when processing activity %d", event.OwnerID, event.ObjectID)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

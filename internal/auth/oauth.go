@@ -29,6 +29,7 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
+	AthleteID    int64  `json:"athlete.id"`
 }
 
 type OAuthHandler struct {
@@ -76,9 +77,15 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate a unique session ID
-	sessionID := generateSessionID()
-	log.Printf("Generated session ID: %s", sessionID)
+	if tokenResp.AthleteID == 0 {
+		log.Printf("Error: No athlete ID in token response")
+		http.Error(w, "Invalid token response", http.StatusInternalServerError)
+		return
+	}
+
+	// Use athlete ID as the session ID
+	sessionID := fmt.Sprintf("%d", tokenResp.AthleteID)
+	log.Printf("Using athlete ID as session ID: %s", sessionID)
 
 	if err := h.sessions.SetTokens(sessionID, tokenResp); err != nil {
 		log.Printf("Error storing tokens: %v", err)
@@ -86,7 +93,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set cookie without explicit domain to use the current domain
+	// Set cookie with athlete ID
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
@@ -98,7 +105,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	log.Printf("Successfully set session cookie and stored tokens, redirecting to dashboard")
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther) // Using StatusSeeOther for POST-redirect-GET
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func generateSessionID() string {

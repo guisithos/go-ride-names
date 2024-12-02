@@ -36,6 +36,7 @@ type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
+	AthleteID    int64  `json:"athlete.id"`
 }
 
 type UpdateActivityRequest struct {
