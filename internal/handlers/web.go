@@ -46,7 +46,8 @@ func NewWebHandler(sessions *auth.SessionStore, oauthConfig *auth.OAuth2Config, 
 }
 
 func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", h.HandleHome)
+	// Root handler will handle both "/" and unknown paths
+	mux.HandleFunc("/", h.handleRoot)
 	mux.HandleFunc("/dashboard", h.handleDashboard)
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
@@ -93,14 +94,15 @@ func (h *WebHandler) getSessionID(r *http.Request) string {
 	return cookie.Value
 }
 
-// HandleHome handles the root path and displays the home page
-func (h *WebHandler) HandleHome(w http.ResponseWriter, r *http.Request) {
+// handleRoot handles both the root path and unknown paths
+func (h *WebHandler) handleRoot(w http.ResponseWriter, r *http.Request) {
+	// Return 404 for unknown paths
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Check if user is already authenticated
+	// Handle root path
 	sessionID := h.getSessionID(r)
 	if sessionID != "" {
 		if tokens, exists := h.sessions.GetTokens(sessionID); exists {
