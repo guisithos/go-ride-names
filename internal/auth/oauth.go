@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/guisithos/go-ride-names/internal/config"
 )
@@ -30,6 +31,37 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
 	AthleteID    int64  `json:"athlete.id"`
+}
+
+func (t *TokenResponse) IsExpired() bool {
+	return time.Now().Unix() >= t.ExpiresAt
+}
+
+func (t *TokenResponse) Refresh(config *OAuth2Config) error {
+	data := url.Values{}
+	data.Set("client_id", config.ClientID)
+	data.Set("client_secret", config.ClientSecret)
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", t.RefreshToken)
+
+	resp, err := http.PostForm(TokenURL, data)
+	if err != nil {
+		return fmt.Errorf("error refreshing token: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var newToken TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&newToken); err != nil {
+		return fmt.Errorf("error decoding refresh response: %v", err)
+	}
+
+	t.AccessToken = newToken.AccessToken
+	t.ExpiresAt = newToken.ExpiresAt
+	if newToken.RefreshToken != "" {
+		t.RefreshToken = newToken.RefreshToken
+	}
+
+	return nil
 }
 
 type OAuthHandler struct {
