@@ -18,15 +18,28 @@ func NewSessionStore(redisURL string) *SessionStore {
 	// Create tokens directory if it doesn't exist
 	tokenDir := "tokens"
 	if err := os.MkdirAll(tokenDir, 0755); err != nil {
-		log.Printf("Warning: Could not create tokens directory: %v", err)
+		log.Printf("Error creating tokens directory: %v", err)
+		// Try to use a temporary directory as fallback
+		tokenDir = filepath.Join(os.TempDir(), "zoatleta-tokens")
+		if err := os.MkdirAll(tokenDir, 0755); err != nil {
+			log.Printf("Critical: Failed to create fallback token directory: %v", err)
+		}
 	}
 
+	log.Printf("Using token directory: %s", tokenDir)
 	return &SessionStore{
 		tokenDir: tokenDir,
 	}
 }
 
 func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
+	if userID == "" {
+		return fmt.Errorf("userID cannot be empty")
+	}
+	if tokens == nil {
+		return fmt.Errorf("tokens cannot be nil")
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
@@ -39,9 +52,17 @@ func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
 		return fmt.Errorf("failed to marshal tokens: %v", err)
 	}
 
-	// Write to file
-	if err := os.WriteFile(filePath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write tokens file: %v", err)
+	// Write to temporary file first
+	tempFile := filePath + ".tmp"
+	if err := os.WriteFile(tempFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write temporary tokens file: %v", err)
+	}
+
+	// Rename temporary file to final file (atomic operation)
+	if err := os.Rename(tempFile, filePath); err != nil {
+		// Try to clean up the temporary file
+		os.Remove(tempFile)
+		return fmt.Errorf("failed to save tokens file: %v", err)
 	}
 
 	log.Printf("Successfully stored tokens for user %s", userID)
@@ -49,6 +70,11 @@ func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
 }
 
 func (s *SessionStore) GetTokens(userID string, config *OAuth2Config) (*TokenResponse, bool) {
+	if userID == "" {
+		log.Printf("Warning: Attempted to get tokens with empty userID")
+		return nil, false
+	}
+
 	s.RLock()
 	defer s.RUnlock()
 
@@ -66,6 +92,16 @@ func (s *SessionStore) GetTokens(userID string, config *OAuth2Config) (*TokenRes
 	var tokens TokenResponse
 	if err := json.Unmarshal(data, &tokens); err != nil {
 		log.Printf("Error unmarshaling tokens: %v", err)
+		// Try to clean up corrupted file
+		if err := os.Remove(filePath); err != nil {
+			log.Printf("Failed to remove corrupted token file: %v", err)
+		}
+		return nil, false
+	}
+
+	// Validate token data
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		log.Printf("Invalid token data for user %s: access_token or refresh_token is empty", userID)
 		return nil, false
 	}
 
@@ -89,12 +125,16 @@ func (s *SessionStore) GetTokens(userID string, config *OAuth2Config) (*TokenRes
 }
 
 func (s *SessionStore) Delete(key string) error {
+	if key == "" {
+		return fmt.Errorf("key cannot be empty")
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
 	filePath := filepath.Join(s.tokenDir, fmt.Sprintf("%s.json", key))
 	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("failed to delete token file: %v", err)
 	}
 	return nil
 }
