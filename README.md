@@ -1,4 +1,4 @@
-# Go Ride Names 🚴
+# zoAtleta
 
 O zoAtleta é um projeto que se conecta com o Strava para renomear suas atividades físicas de forma automática e bem-humorada. Desenvolvido em Go, ele utiliza a API do Strava para acessar suas atividades. 
 
