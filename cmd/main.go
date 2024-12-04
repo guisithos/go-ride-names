@@ -26,10 +26,9 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Create shared components with Redis
-	redisURL := os.Getenv("REDIS_URL")
-	log.Printf("Redis URL: %s", redisURL)
-	sessions := auth.NewSessionStore(redisURL)
+	// Initialize session store
+	sessions := auth.NewSessionStore()
+	log.Printf("Session store initialized")
 
 	// Create router
 	mux := http.NewServeMux()
