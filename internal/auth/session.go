@@ -19,23 +19,30 @@ type SessionStore struct {
 func NewSessionStore(redisURL string) *SessionStore {
 	store := &SessionStore{}
 
-	if redisURL != "" {
-		opt, err := redis.ParseURL(redisURL)
-		if err != nil {
-			log.Printf("Warning: Redis URL invalid: %v", err)
-			return store
-		}
-
-		store.redis = redis.NewClient(opt)
-		// Test the connection
-		if err := store.redis.Ping(context.Background()).Err(); err != nil {
-			log.Printf("Warning: Redis connection failed: %v", err)
-			store.redis = nil
-		} else {
-			log.Printf("Successfully connected to Redis")
-		}
+	if redisURL == "" {
+		log.Printf("Warning: REDIS_URL not set, using in-memory storage")
+		return store
 	}
 
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Printf("Error parsing Redis URL: %v", err)
+		return store
+	}
+
+	store.redis = redis.NewClient(opt)
+
+	// Test the connection with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := store.redis.Ping(ctx).Err(); err != nil {
+		log.Printf("Error connecting to Redis: %v", err)
+		store.redis = nil
+		return store
+	}
+
+	log.Printf("Successfully connected to Redis at %s", redisURL)
 	return store
 }
 
@@ -47,23 +54,28 @@ func (s *SessionStore) SetTokens(athleteID string, tokens *TokenResponse) error 
 		return fmt.Errorf("tokens cannot be nil")
 	}
 
+	if s.redis == nil {
+		log.Printf("Error: Redis client is not initialized")
+		return fmt.Errorf("storage backend not available")
+	}
+
 	data, err := json.Marshal(tokens)
 	if err != nil {
+		log.Printf("Error marshaling tokens: %v", err)
 		return fmt.Errorf("failed to marshal tokens: %v", err)
 	}
 
 	key := fmt.Sprintf("athlete:%s:tokens", athleteID)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	if s.redis != nil {
-		if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
-			return fmt.Errorf("failed to store tokens in Redis: %v", err)
-		}
-		log.Printf("Stored tokens for athlete %s in Redis", athleteID)
-		return nil
+	if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
+		log.Printf("Error storing tokens in Redis: %v", err)
+		return fmt.Errorf("failed to store tokens in Redis: %v", err)
 	}
 
-	return fmt.Errorf("no storage backend available")
+	log.Printf("Successfully stored tokens for athlete %s in Redis", athleteID)
+	return nil
 }
 
 func (s *SessionStore) GetTokens(athleteID string) (*TokenResponse, bool) {

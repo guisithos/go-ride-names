@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/service"
+	"github.com/guisithos/go-ride-names/internal/storage"
 	"github.com/guisithos/go-ride-names/internal/strava"
 )
 
@@ -24,12 +26,12 @@ type WebhookEvent struct {
 }
 
 type WebhookHandler struct {
-	sessions     *auth.SessionStore
+	store        storage.Store
 	stravaConfig *config.Config
 	verifyToken  string
 }
 
-func NewWebhookHandler(sessions *auth.SessionStore, stravaConfig *config.Config) *WebhookHandler {
+func NewWebhookHandler(store storage.Store, stravaConfig *config.Config) *WebhookHandler {
 	verifyToken := os.Getenv("WEBHOOK_VERIFY_TOKEN")
 	if verifyToken == "" {
 		log.Println("Warning: WEBHOOK_VERIFY_TOKEN not set")
@@ -40,7 +42,7 @@ func NewWebhookHandler(sessions *auth.SessionStore, stravaConfig *config.Config)
 	}
 
 	return &WebhookHandler{
-		sessions:     sessions,
+		store:        store,
 		stravaConfig: stravaConfig,
 		verifyToken:  verifyToken,
 	}
@@ -98,28 +100,37 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Processing new activity: ID=%d", event.ObjectID)
 
 			// Get tokens from session
-			tokens, exists := h.sessions.GetTokens("user")
+			ownerID := fmt.Sprintf("%d", event.OwnerID)
+			tokens, exists := h.store.GetTokens(ownerID)
 			if !exists {
-				log.Printf("No tokens found in session for processing activity %d", event.ObjectID)
+				log.Printf("No tokens found for athlete %s", ownerID)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
-			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+			tokenResp, ok := tokens.(*auth.TokenResponse)
+			if !ok {
+				log.Printf("Invalid token type for athlete %s", ownerID)
+				http.Error(w, "Invalid token data", http.StatusInternalServerError)
+				return
+			}
+
+			client := strava.NewClient(tokenResp.AccessToken, tokenResp.RefreshToken,
 				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 			activityService := service.NewActivityService(client)
 
-			go func() {
-				if err := activityService.ProcessNewActivity(event.ObjectID); err != nil {
-					log.Printf("Error processing activity %d: %v", event.ObjectID, err)
-				}
-			}()
+			if err := activityService.RenameActivity(event.ObjectID); err != nil {
+				log.Printf("Error renaming activity: %v", err)
+				http.Error(w, "Error processing activity", http.StatusInternalServerError)
+				return
+			}
+
+			log.Printf("Successfully processed activity %d", event.ObjectID)
 		}
 
 		w.WriteHeader(http.StatusOK)
 
 	default:
-		log.Printf("Method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }

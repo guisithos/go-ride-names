@@ -14,18 +14,19 @@ import (
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
 	"github.com/guisithos/go-ride-names/internal/service"
+	"github.com/guisithos/go-ride-names/internal/storage"
 	"github.com/guisithos/go-ride-names/internal/strava"
 )
 
 type WebHandler struct {
-	sessions     *auth.SessionStore
+	store        storage.Store
 	oauthCfg     *auth.OAuth2Config
 	stravaConfig *config.Config
 }
 
-func NewWebHandler(sessions *auth.SessionStore, oauthCfg *auth.OAuth2Config, stravaConfig *config.Config) *WebHandler {
+func NewWebHandler(store storage.Store, oauthCfg *auth.OAuth2Config, stravaConfig *config.Config) *WebHandler {
 	return &WebHandler{
-		sessions:     sessions,
+		store:        store,
 		oauthCfg:     oauthCfg,
 		stravaConfig: stravaConfig,
 	}
@@ -68,9 +69,16 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	athleteID := cookie.Value
-	tokens, exists := h.sessions.GetTokens(athleteID)
+	tokensInterface, exists := h.store.GetTokens(athleteID)
 	if !exists {
 		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	tokens, ok := tokensInterface.(*auth.TokenResponse)
+	if !ok {
+		log.Printf("Invalid token type for athlete %s", athleteID)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
@@ -94,7 +102,7 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		tokens.RefreshToken = newTokens.RefreshToken
 		tokens.ExpiresAt = newTokens.ExpiresAt
 
-		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+		if err := h.store.SetTokens(athleteID, tokens); err != nil {
 			log.Printf("Failed to update tokens: %v", err)
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
@@ -137,9 +145,16 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	}
 
 	athleteID := cookie.Value
-	tokens, exists := h.sessions.GetTokens(athleteID)
+	tokensInterface, exists := h.store.GetTokens(athleteID)
 	if !exists {
 		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, ok := tokensInterface.(*auth.TokenResponse)
+	if !ok {
+		log.Printf("Invalid token type for athlete %s", athleteID)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -161,7 +176,7 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		tokens.RefreshToken = newTokens.RefreshToken
 		tokens.ExpiresAt = newTokens.ExpiresAt
 
-		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+		if err := h.store.SetTokens(athleteID, tokens); err != nil {
 			log.Printf("Failed to update tokens: %v", err)
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
@@ -197,9 +212,16 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	athleteID := cookie.Value
-	tokens, exists := h.sessions.GetTokens(athleteID)
+	tokensInterface, exists := h.store.GetTokens(athleteID)
 	if !exists {
 		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokens, ok := tokensInterface.(*auth.TokenResponse)
+	if !ok {
+		log.Printf("Invalid token type for athlete %s", athleteID)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -221,7 +243,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		tokens.RefreshToken = newTokens.RefreshToken
 		tokens.ExpiresAt = newTokens.ExpiresAt
 
-		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+		if err := h.store.SetTokens(athleteID, tokens); err != nil {
 			log.Printf("Failed to update tokens: %v", err)
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
@@ -261,7 +283,7 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store subscription status in session with longer expiration
-	if err := h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
+	if err := h.store.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
@@ -285,9 +307,16 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	athleteID := cookie.Value
-	tokens, exists := h.sessions.GetTokens(athleteID)
+	tokensInterface, exists := h.store.GetTokens(athleteID)
 	if !exists {
 		log.Printf("No tokens found for athlete %s", athleteID)
+		json.NewEncoder(w).Encode(map[string]bool{"active": false})
+		return
+	}
+
+	tokens, ok := tokensInterface.(*auth.TokenResponse)
+	if !ok {
+		log.Printf("Invalid token type for athlete %s", athleteID)
 		json.NewEncoder(w).Encode(map[string]bool{"active": false})
 		return
 	}
@@ -307,11 +336,11 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	active := len(subs) > 0
 	if active {
 		// Update session status
-		if err := h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
+		if err := h.store.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
 			log.Printf("Error storing webhook status: %v", err)
 		}
 	} else {
-		h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), nil)
+		h.store.Set(fmt.Sprintf("webhook_active:%s", athleteID), nil)
 	}
 
 	log.Printf("Subscription status check for athlete %s - Active: %v, Subscriptions: %d",
