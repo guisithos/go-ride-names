@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -12,122 +13,149 @@ import (
 
 type SessionStore struct {
 	sync.RWMutex
-	tokens map[string]*TokenResponse
-	values map[string]interface{}
-	redis  *redis.Client
+	redis *redis.Client
 }
 
 func NewSessionStore(redisURL string) *SessionStore {
-	store := &SessionStore{
-		tokens: make(map[string]*TokenResponse),
-		values: make(map[string]interface{}),
-	}
+	store := &SessionStore{}
 
 	if redisURL != "" {
 		opt, err := redis.ParseURL(redisURL)
 		if err != nil {
-			log.Printf("Warning: Redis URL invalid, falling back to memory store: %v", err)
+			log.Printf("Warning: Redis URL invalid: %v", err)
 			return store
 		}
 
 		store.redis = redis.NewClient(opt)
 		// Test the connection
 		if err := store.redis.Ping(context.Background()).Err(); err != nil {
-			log.Printf("Warning: Redis connection failed, falling back to memory store: %v", err)
+			log.Printf("Warning: Redis connection failed: %v", err)
 			store.redis = nil
+		} else {
+			log.Printf("Successfully connected to Redis")
 		}
 	}
 
 	return store
 }
 
-func (s *SessionStore) SetTokens(userID string, tokens *TokenResponse) error {
-	s.Lock()
-	defer s.Unlock()
+func (s *SessionStore) SetTokens(athleteID string, tokens *TokenResponse) error {
+	if athleteID == "" {
+		return fmt.Errorf("athlete ID cannot be empty")
+	}
+	if tokens == nil {
+		return fmt.Errorf("tokens cannot be nil")
+	}
 
-	// Store in memory
-	s.tokens[userID] = tokens
+	data, err := json.Marshal(tokens)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tokens: %v", err)
+	}
 
-	// Store in Redis if available
+	key := fmt.Sprintf("athlete:%s:tokens", athleteID)
+	ctx := context.Background()
+
 	if s.redis != nil {
-		data, err := json.Marshal(tokens)
+		if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
+			return fmt.Errorf("failed to store tokens in Redis: %v", err)
+		}
+		log.Printf("Stored tokens for athlete %s in Redis", athleteID)
+		return nil
+	}
+
+	return fmt.Errorf("no storage backend available")
+}
+
+func (s *SessionStore) GetTokens(athleteID string) (*TokenResponse, bool) {
+	if athleteID == "" {
+		log.Printf("Warning: Attempted to get tokens with empty athlete ID")
+		return nil, false
+	}
+
+	key := fmt.Sprintf("athlete:%s:tokens", athleteID)
+	ctx := context.Background()
+
+	if s.redis != nil {
+		data, err := s.redis.Get(ctx, key).Bytes()
 		if err != nil {
-			return err
-		}
-		return s.redis.Set(context.Background(), "tokens:"+userID, data, 24*time.Hour).Err()
-	}
-	return nil
-}
-
-func (s *SessionStore) GetTokens(userID string) (*TokenResponse, bool) {
-	s.RLock()
-	defer s.RUnlock()
-
-	// Try Redis first i
-	if s.redis != nil {
-		data, err := s.redis.Get(context.Background(), "tokens:"+userID).Bytes()
-		if err == nil {
-			var tokens TokenResponse
-			if err := json.Unmarshal(data, &tokens); err == nil {
-				return &tokens, true
+			if err != redis.Nil {
+				log.Printf("Error retrieving tokens from Redis: %v", err)
 			}
+			return nil, false
 		}
+
+		var tokens TokenResponse
+		if err := json.Unmarshal(data, &tokens); err != nil {
+			log.Printf("Error unmarshaling tokens: %v", err)
+			return nil, false
+		}
+
+		// Extend token expiration
+		s.redis.Expire(ctx, key, 24*time.Hour)
+		return &tokens, true
 	}
 
-	// Fallback to memory
-	tokens, exists := s.tokens[userID]
-	return tokens, exists
+	return nil, false
 }
 
+func (s *SessionStore) DeleteTokens(athleteID string) error {
+	if athleteID == "" {
+		return fmt.Errorf("athlete ID cannot be empty")
+	}
+
+	key := fmt.Sprintf("athlete:%s:tokens", athleteID)
+	ctx := context.Background()
+
+	if s.redis != nil {
+		if err := s.redis.Del(ctx, key).Err(); err != nil {
+			return fmt.Errorf("failed to delete tokens: %v", err)
+		}
+		log.Printf("Deleted tokens for athlete %s", athleteID)
+		return nil
+	}
+
+	return fmt.Errorf("no storage backend available")
+}
+
+// Set stores a value in Redis with expiration
 func (s *SessionStore) Set(key string, value interface{}) error {
-	s.Lock()
-	defer s.Unlock()
-
-	// Store in Redis
-	if s.redis != nil {
-		data, err := json.Marshal(value)
-		if err != nil {
-			return err
-		}
-		return s.redis.Set(context.Background(), key, data, 24*time.Hour).Err()
+	if s.redis == nil {
+		return fmt.Errorf("no storage backend available")
 	}
 
-	// Store in memory based on value type
-	if tokenResp, ok := value.(*TokenResponse); ok {
-		s.tokens[key] = tokenResp
-	} else {
-		s.values[key] = value
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to marshal value: %v", err)
 	}
+
+	ctx := context.Background()
+	if err := s.redis.Set(ctx, key, data, 24*time.Hour).Err(); err != nil {
+		return fmt.Errorf("failed to store value in Redis: %v", err)
+	}
+
 	return nil
 }
 
-func (s *SessionStore) Get(key string) interface{} {
-	s.RLock()
-	defer s.RUnlock()
+// Get retrieves a value from Redis
+func (s *SessionStore) Get(key string) (interface{}, bool) {
+	if s.redis == nil {
+		return nil, false
+	}
 
-	// Try Redis first
-	if s.redis != nil {
-		data, err := s.redis.Get(context.Background(), key).Bytes()
-		if err == nil {
-			var value interface{}
-			if err := json.Unmarshal(data, &value); err == nil {
-				return value
-			}
-			// Try as boolean
-			var boolValue bool
-			if err := json.Unmarshal(data, &boolValue); err == nil {
-				return boolValue
-			}
+	ctx := context.Background()
+	data, err := s.redis.Get(ctx, key).Bytes()
+	if err != nil {
+		if err != redis.Nil {
+			log.Printf("Error retrieving value from Redis: %v", err)
 		}
+		return nil, false
 	}
 
-	// Fallback to memory
-	// First check tokens map
-	if token, exists := s.tokens[key]; exists {
-		return token
+	var value interface{}
+	if err := json.Unmarshal(data, &value); err != nil {
+		log.Printf("Error unmarshaling value: %v", err)
+		return nil, false
 	}
-	// Then check values map
-	return s.values[key]
+
+	return value, true
 }
-
-//t

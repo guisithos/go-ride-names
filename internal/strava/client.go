@@ -54,51 +54,39 @@ func NewClient(accessToken, refreshToken, clientID, clientSecret string) *Client
 	}
 }
 
-func (c *Client) RefreshToken() error {
+func (c *Client) RefreshToken() (*TokenResponse, error) {
 	data := url.Values{}
 	data.Set("client_id", c.clientID)
 	data.Set("client_secret", c.clientSecret)
-	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", c.refreshToken)
+	data.Set("grant_type", "refresh_token")
 
-	req, err := http.NewRequest("POST", authURL, strings.NewReader(data.Encode()))
+	resp, err := c.httpClient.PostForm(authURL, data)
 	if err != nil {
-		return fmt.Errorf("error creating refresh request: %v", err)
-	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error making refresh request: %v", err)
+		return nil, fmt.Errorf("failed to refresh token: %v", err)
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to refresh token: status=%d, body=%s, client_id=%s",
-			resp.StatusCode, string(bodyBytes), c.clientID)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to refresh token: status=%d, body=%s", resp.StatusCode, body)
 	}
 
 	var tokenResp TokenResponse
-	if err := json.Unmarshal(bodyBytes, &tokenResp); err != nil {
-		return fmt.Errorf("error parsing refresh response: %v, body: %s", err, string(bodyBytes))
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to decode token response: %v", err)
 	}
 
-	if tokenResp.AccessToken == "" {
-		return fmt.Errorf("received empty access token in response: %s", string(bodyBytes))
-	}
-
+	// Update client's tokens
 	c.accessToken = tokenResp.AccessToken
-	if tokenResp.RefreshToken != "" {
-		c.refreshToken = tokenResp.RefreshToken
-	}
-	return nil
+	c.refreshToken = tokenResp.RefreshToken
+
+	return &tokenResp, nil
 }
 
 // handle automatic token refresh
 func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
-	// Add authorization headre
+	// Add authorization header
 	if c.accessToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
 	}
@@ -111,11 +99,14 @@ func (c *Client) doRequest(req *http.Request) (*http.Response, error) {
 	// Handle token refresh if needed
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Printf("Token expired, attempting refresh")
-		if err := c.RefreshToken(); err != nil {
+		newTokens, err := c.RefreshToken()
+		if err != nil {
 			return nil, fmt.Errorf("token refresh failed: %v", err)
 		}
 
-		// Retry request with new token
+		// Update tokens and retry request
+		c.accessToken = newTokens.AccessToken
+		c.refreshToken = newTokens.RefreshToken
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
 		return c.httpClient.Do(req)
 	}
