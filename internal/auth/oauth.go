@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/guisithos/go-ride-names/internal/config"
+	"github.com/guisithos/go-ride-names/internal/storage"
 )
 
 const (
@@ -34,18 +35,18 @@ type TokenResponse struct {
 }
 
 type OAuthHandler struct {
-	config   *OAuth2Config
-	sessions *SessionStore
+	config *OAuth2Config
+	store  storage.Store
 }
 
-func NewOAuthHandler(cfg *config.Config, sessions *SessionStore) *OAuthHandler {
+func NewOAuthHandler(cfg *config.Config, store storage.Store) *OAuthHandler {
 	return &OAuthHandler{
 		config: &OAuth2Config{
 			ClientID:     cfg.StravaClientID,
 			ClientSecret: cfg.StravaClientSecret,
 			RedirectURI:  cfg.OAuth.RedirectURI,
 		},
-		sessions: sessions,
+		store: store,
 	}
 }
 
@@ -86,7 +87,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Use athlete ID as the session key
 	sessionKey := fmt.Sprintf("%d", tokenResp.Athlete.ID)
-	if err := h.sessions.SetTokens(sessionKey, tokenResp); err != nil {
+	if err := h.store.SetTokens(sessionKey, tokenResp); err != nil {
 		log.Printf("Failed to store tokens: %v", err)
 		http.Error(w, "Failed to store authentication", http.StatusInternalServerError)
 		return
@@ -112,7 +113,7 @@ func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, er
 	data.Set("client_secret", config.ClientSecret)
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
-	data.Set("redirect_uri", config.RedirectURI) // Required for token exchange
+	data.Set("redirect_uri", config.RedirectURI)
 
 	resp, err := http.PostForm(TokenURL, data)
 	if err != nil {

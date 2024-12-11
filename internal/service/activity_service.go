@@ -168,3 +168,29 @@ func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) e
 	s.webhookSubscription = subscription
 	return nil
 }
+
+// RenameActivity renames a specific activity with a fun name
+func (s *ActivityService) RenameActivity(activityID int64) error {
+	// Get activity details
+	activity, err := s.client.GetActivity(activityID)
+	if err != nil {
+		return fmt.Errorf("failed to get activity: %v", err)
+	}
+
+	// Generate a fun name based on activity type
+	newName := generateFunName(activity.Type)
+
+	// Update activity name
+	if err := s.client.UpdateActivity(activityID, newName); err != nil {
+		return fmt.Errorf("failed to update activity: %v", err)
+	}
+
+	return nil
+}
+
+// generateFunName creates a fun name based on activity type
+func generateFunName(activityType string) string {
+	// Add your fun name generation logic here
+	// For now, return a simple placeholder
+	return fmt.Sprintf("Zoeira do %s", activityType)
+}
