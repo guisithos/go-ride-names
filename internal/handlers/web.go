@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"log"
 
@@ -58,10 +59,46 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	tokens, exists := h.sessions.GetTokens("user")
-	if !exists {
+	// Get athlete ID from cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Printf("No session cookie found: %v", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
+	}
+
+	athleteID := cookie.Value
+	tokens, exists := h.sessions.GetTokens(athleteID)
+	if !exists {
+		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Check if token needs refresh
+	now := time.Now().Unix()
+	if now >= tokens.ExpiresAt {
+		log.Printf("Token expired for athlete %s, refreshing...", athleteID)
+		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+		newTokens, err := client.RefreshToken()
+		if err != nil {
+			log.Printf("Failed to refresh token: %v", err)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		// Update tokens in session
+		tokens.AccessToken = newTokens.AccessToken
+		tokens.RefreshToken = newTokens.RefreshToken
+		tokens.ExpiresAt = newTokens.ExpiresAt
+
+		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+			log.Printf("Failed to update tokens: %v", err)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
 	}
 
 	tmpl, err := template.ParseFiles(filepath.Join("templates", "dashboard.html"))
@@ -72,8 +109,10 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		AccessToken string
+		AthleteID   string
 	}{
 		AccessToken: tokens.AccessToken,
+		AthleteID:   athleteID,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -89,16 +128,51 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
-	if !exists {
+	// Get athlete ID from cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Printf("No session cookie found: %v", err)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken, h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	athleteID := cookie.Value
+	tokens, exists := h.sessions.GetTokens(athleteID)
+	if !exists {
+		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if token needs refresh
+	now := time.Now().Unix()
+	if now >= tokens.ExpiresAt {
+		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+		newTokens, err := client.RefreshToken()
+		if err != nil {
+			log.Printf("Failed to refresh token: %v", err)
+			http.Error(w, "Authentication error", http.StatusUnauthorized)
+			return
+		}
+
+		tokens.AccessToken = newTokens.AccessToken
+		tokens.RefreshToken = newTokens.RefreshToken
+		tokens.ExpiresAt = newTokens.ExpiresAt
+
+		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+			log.Printf("Failed to update tokens: %v", err)
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
-	_, err := activityService.ListActivities(1, 30, 0, 0, true)
+	_, err = activityService.ListActivities(1, 30, 0, 0, true)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error updating activities: %v", err), http.StatusInternalServerError)
 		return
@@ -114,18 +188,44 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
-	if !exists {
-		log.Printf("No tokens found in session")
+	// Get athlete ID from cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Printf("No session cookie found: %v", err)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Validate tokens
-	if tokens.AccessToken == "" {
-		log.Printf("Access token is empty")
-		http.Error(w, "Invalid access token", http.StatusUnauthorized)
+	athleteID := cookie.Value
+	tokens, exists := h.sessions.GetTokens(athleteID)
+	if !exists {
+		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
+	}
+
+	// Check if token needs refresh
+	now := time.Now().Unix()
+	if now >= tokens.ExpiresAt {
+		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+		newTokens, err := client.RefreshToken()
+		if err != nil {
+			log.Printf("Failed to refresh token: %v", err)
+			http.Error(w, "Authentication error", http.StatusUnauthorized)
+			return
+		}
+
+		tokens.AccessToken = newTokens.AccessToken
+		tokens.RefreshToken = newTokens.RefreshToken
+		tokens.ExpiresAt = newTokens.ExpiresAt
+
+		if err := h.sessions.SetTokens(athleteID, tokens); err != nil {
+			log.Printf("Failed to update tokens: %v", err)
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Get base URL from request or environment
@@ -134,7 +234,6 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		baseURL = "https://" + r.Host
 	}
 	callbackURL := baseURL + "/webhook"
-	log.Printf("Subscription attempt - Base URL: %s, Callback URL: %s", baseURL, callbackURL)
 
 	// Validate Strava configuration
 	if h.stravaConfig.StravaClientID == "" || h.stravaConfig.StravaClientSecret == "" {
@@ -150,14 +249,11 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Creating Strava client with ID: %s, Access Token: %s (first 10 chars)",
-		h.stravaConfig.StravaClientID, tokens.AccessToken[:10])
-
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
-	err := activityService.SubscribeToWebhooks(callbackURL, verifyToken)
+	err = activityService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {
 		log.Printf("Error managing webhook subscription: %v", err)
 		http.Error(w, fmt.Sprintf("Error managing subscription: %v", err), http.StatusInternalServerError)
@@ -165,11 +261,11 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store subscription status in session with longer expiration
-	if err := h.sessions.Set("webhook_active", true); err != nil {
+	if err := h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
-	log.Printf("Webhook subscription is active")
+	log.Printf("Webhook subscription is active for athlete %s", athleteID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": true})
 }
@@ -180,9 +276,18 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	tokens, exists := h.sessions.GetTokens("user")
+	// Get athlete ID from cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Printf("No session cookie found: %v", err)
+		json.NewEncoder(w).Encode(map[string]bool{"active": false})
+		return
+	}
+
+	athleteID := cookie.Value
+	tokens, exists := h.sessions.GetTokens(athleteID)
 	if !exists {
-		log.Printf("No tokens found in session")
+		log.Printf("No tokens found for athlete %s", athleteID)
 		json.NewEncoder(w).Encode(map[string]bool{"active": false})
 		return
 	}
@@ -202,14 +307,15 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	active := len(subs) > 0
 	if active {
 		// Update session status
-		if err := h.sessions.Set("webhook_active", true); err != nil {
+		if err := h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), true); err != nil {
 			log.Printf("Error storing webhook status: %v", err)
 		}
 	} else {
-		h.sessions.Set("webhook_active", nil)
+		h.sessions.Set(fmt.Sprintf("webhook_active:%s", athleteID), nil)
 	}
 
-	log.Printf("Subscription status check - Active: %v, Subscriptions: %d", active, len(subs))
+	log.Printf("Subscription status check for athlete %s - Active: %v, Subscriptions: %d",
+		athleteID, active, len(subs))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
 }

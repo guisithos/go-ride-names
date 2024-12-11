@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -20,11 +21,16 @@ type OAuth2Config struct {
 	RedirectURI  string
 }
 
+type Athlete struct {
+	ID int64 `json:"id"`
+}
+
 type TokenResponse struct {
-	TokenType    string `json:"token_type"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
+	TokenType    string  `json:"token_type"`
+	AccessToken  string  `json:"access_token"`
+	RefreshToken string  `json:"refresh_token"`
+	ExpiresAt    int64   `json:"expires_at"`
+	Athlete      Athlete `json:"athlete"`
 }
 
 type OAuthHandler struct {
@@ -60,17 +66,43 @@ func (h *OAuthHandler) handleAuth(w http.ResponseWriter, r *http.Request) {
 func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
+		log.Printf("No authorization code in callback")
 		http.Error(w, "Code not found", http.StatusBadRequest)
 		return
 	}
 
 	tokenResp, err := exchangeCodeForToken(code, h.config)
 	if err != nil {
+		log.Printf("Failed to exchange code for token: %v", err)
 		http.Error(w, fmt.Sprintf("Error exchanging code: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	h.sessions.SetTokens("user", tokenResp)
+	if tokenResp.Athlete.ID == 0 {
+		log.Printf("No athlete ID in token response")
+		http.Error(w, "Invalid token response", http.StatusInternalServerError)
+		return
+	}
+
+	// Use athlete ID as the session key
+	sessionKey := fmt.Sprintf("%d", tokenResp.Athlete.ID)
+	if err := h.sessions.SetTokens(sessionKey, tokenResp); err != nil {
+		log.Printf("Failed to store tokens: %v", err)
+		http.Error(w, "Failed to store authentication", http.StatusInternalServerError)
+		return
+	}
+
+	// Set cookie with athlete ID
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionKey,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 24 * 60 * 60, // 60 days
+	})
+
 	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
 }
 
@@ -80,16 +112,17 @@ func exchangeCodeForToken(code string, config *OAuth2Config) (*TokenResponse, er
 	data.Set("client_secret", config.ClientSecret)
 	data.Set("code", code)
 	data.Set("grant_type", "authorization_code")
+	data.Set("redirect_uri", config.RedirectURI) // Required for token exchange
 
 	resp, err := http.PostForm(TokenURL, data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to make request to Strava: %v", err)
 	}
 	defer resp.Body.Close()
 
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
 	return &tokenResp, nil
