@@ -14,6 +14,10 @@ type Config struct {
 	OAuth              struct {
 		RedirectURI string
 	}
+	GCS struct {
+		BucketName      string
+		CredentialsFile string
+	}
 }
 
 // LoadConfig loads configuration from environment variables
@@ -35,12 +39,19 @@ func LoadConfig() (*Config, error) {
 	}
 	config.OAuth.RedirectURI = redirectURI
 
+	// Load GCS configuration
+	config.GCS.BucketName = getEnvOrDefault("GCS_BUCKET_NAME", "")
+	config.GCS.CredentialsFile = getEnvOrDefault("GOOGLE_APPLICATION_CREDENTIALS", "")
+
 	// Validate required fields
 	if config.StravaClientID == "" {
 		return nil, fmt.Errorf("STRAVA_CLIENT_ID is required")
 	}
 	if config.StravaClientSecret == "" {
 		return nil, fmt.Errorf("STRAVA_CLIENT_SECRET is required")
+	}
+	if config.GCS.BucketName == "" {
+		return nil, fmt.Errorf("GCS_BUCKET_NAME is required")
 	}
 
 	return config, nil
