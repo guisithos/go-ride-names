@@ -63,6 +63,7 @@ func (s *GCSStore) Close() error {
 func (s *GCSStore) Set(key string, value interface{}) error {
 	data, err := json.Marshal(value)
 	if err != nil {
+		log.Printf("Failed to marshal value: %v", err)
 		return fmt.Errorf("failed to marshal value: %v", err)
 	}
 
@@ -70,12 +71,13 @@ func (s *GCSStore) Set(key string, value interface{}) error {
 	w := obj.NewWriter(s.ctx)
 
 	if _, err := w.Write(data); err != nil {
-		w.Close()
+		log.Printf("Failed to write to GCS: %v", err)
 		return fmt.Errorf("failed to write to GCS: %v", err)
 	}
 
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("failed to close writer: %v", err)
+		log.Printf("Failed to close GCS writer: %v", err)
+		return fmt.Errorf("failed to close GCS writer: %v", err)
 	}
 
 	return nil
@@ -129,7 +131,16 @@ func (s *GCSStore) SetTokens(athleteID string, tokens interface{}) error {
 	}
 
 	key := fmt.Sprintf("athlete/%s/tokens.json", athleteID)
-	return s.Set(key, tokens)
+	log.Printf("Attempting to store tokens at key: %s", key)
+
+	err := s.Set(key, tokens)
+	if err != nil {
+		log.Printf("Failed to store tokens in GCS: %v", err)
+		return err
+	}
+
+	log.Printf("Successfully stored tokens in GCS")
+	return nil
 }
 
 func (s *GCSStore) GetTokens(athleteID string) (interface{}, bool) {
