@@ -13,22 +13,26 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'go-ride-names'
+      - 'zoatleta'
       - '--image'
       - 'gcr.io/$PROJECT_ID/zoatleta'
       - '--region'
       - 'us-central1'
       - '--platform'
       - 'managed'
+      - '--service-account'
+      - 'zoatleta-storage@zoatleta.iam.gserviceaccount.com'
       - '--allow-unauthenticated'
       - '--set-secrets'
-      - 'STRAVA_CLIENT_ID=STRAVA_CLIENT_ID:latest,STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest'
+      - >-
+        STRAVA_CLIENT_ID=STRAVA_CLIENT_ID:latest,
+        STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest
       - '--set-env-vars'
       - >-
         BASE_URL=https://zoatleta.tech,
         OAUTH_REDIRECT_URI=https://zoatleta.tech/callback,
         WEBHOOK_VERIFY_TOKEN=strava-webhook-verify-token-123,
-        REDIS_URL=redis://10.0.0.3:6379
+        GCS_BUCKET_NAME=zoatleta-zoatleta
 
 images:
   - 'gcr.io/$PROJECT_ID/zoatleta' 
