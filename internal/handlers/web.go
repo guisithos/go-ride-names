@@ -135,45 +135,41 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	tokens, ok := tokensInterface.(*auth.TokenResponse)
 	if !ok {
 		log.Printf("Invalid token type for athlete %s", athleteID)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
-	// Check if token needs refresh
-	now := time.Now().Unix()
-	if now >= tokens.ExpiresAt {
-		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-
-		newTokens, err := client.RefreshToken()
-		if err != nil {
-			log.Printf("Failed to refresh token: %v", err)
-			http.Error(w, "Authentication error", http.StatusUnauthorized)
-			return
-		}
-
-		tokens.AccessToken = newTokens.AccessToken
-		tokens.RefreshToken = newTokens.RefreshToken
-		tokens.ExpiresAt = newTokens.ExpiresAt
-
-		if err := h.store.SetTokens(athleteID, tokens); err != nil {
-			log.Printf("Failed to update tokens: %v", err)
-			http.Error(w, "Server error", http.StatusInternalServerError)
-			return
-		}
-	}
-
+	// Create Strava client
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+
+	// Use existing ActivityService
 	activityService := service.NewActivityService(client)
 
-	_, err = activityService.ListActivities(1, 30, 0, 0, true)
+	// Get recent activities
+	activities, err := client.GetAthleteActivities(1, 30, 0, 0)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error updating activities: %v", err), http.StatusInternalServerError)
+		log.Printf("Error fetching activities: %v", err)
+		http.Error(w, "Failed to fetch activities", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	// Rename activities
+	renamed := 0
+	for _, activity := range activities {
+		if err := activityService.RenameActivity(activity.ID); err != nil {
+			log.Printf("Error renaming activity %d: %v", activity.ID, err)
+			continue
+		}
+		renamed++
+	}
+
+	log.Printf("Successfully renamed %d activities for athlete %s", renamed, athleteID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"renamed": renamed,
+	})
 }
 
 func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
