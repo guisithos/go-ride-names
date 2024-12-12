@@ -63,8 +63,41 @@
         </div>
 
         <script>
-            const accessToken = "{{.AccessToken}}";
-            const athleteID = "{{.AthleteID}}";
+            // Store these as global variables
+            window.accessToken = "{{.AccessToken}}";
+            window.athleteID = "{{.AthleteID}}";
+            
+            // Define toggleMoreActivities function
+            function toggleMoreActivities() {
+                const expandedContainer = document.getElementById('activities-expanded');
+                const button = document.querySelector('.show-more-btn');
+                
+                if (expandedContainer.classList.contains('show')) {
+                    expandedContainer.classList.remove('show');
+                    button.textContent = 'Mostrar mais atividades';
+                } else {
+                    expandedContainer.classList.add('show');
+                    button.textContent = 'Mostrar menos';
+                    
+                    expandedContainer.innerHTML = '';
+                    window.remainingActivities.forEach(activity => {
+                        const div = document.createElement('div');
+                        div.className = 'activity';
+                        const isStationary = stationaryActivities.includes(activity.type);
+                        
+                        div.innerHTML = `
+                            <h3>${activity.name}</h3>
+                            <p>Tipo: ${activity.type}</p>
+                            ${isStationary 
+                                ? `<p>Tempo: ${formatDuration(activity.moving_time)}</p>`
+                                : `<p>Distância: ${formatDistance(activity.distance)}</p>`
+                            }
+                            <p>Data: ${formatDate(activity.start_date_local)}</p>
+                        `;
+                        expandedContainer.appendChild(div);
+                    });
+                }
+            }
         </script>
         <script src="/static/js/dashboard.js"></script>
     </body>
