@@ -57,14 +57,16 @@ function formatDate(dateStr) {
 
 // Load activities from Strava
 async function loadActivities() {
+    console.log('Loading activities with token:', window.accessToken);
     try {
         const response = await fetch('https://www.strava.com/api/v3/athlete/activities', {
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': `Bearer ${window.accessToken}`
             }
         });
 
         if (!response.ok) {
+            console.error('Strava API error:', response.status, response.statusText);
             throw new Error('Failed to fetch activities');
         }
 

@@ -94,22 +94,19 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if token needs refresh
-	if time.Now().Unix() > tokens.ExpiresAt {
-		log.Printf("Token expired for athlete %s, refreshing", athleteID)
-		// Add refresh token logic here
-	}
-
-	// Render dashboard template
+	// Render dashboard template with both athleteID and accessToken
 	data := struct {
-		AthleteID string
+		AthleteID   string
+		AccessToken string
 	}{
-		AthleteID: athleteID,
+		AthleteID:   athleteID,
+		AccessToken: tokens.AccessToken,
 	}
 
 	if err := h.templates.ExecuteTemplate(w, "dashboard.html", data); err != nil {
 		log.Printf("Error rendering dashboard template: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 }
 
