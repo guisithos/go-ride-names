@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -56,66 +55,47 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received webhook request: Method=%s, URL=%s", r.Method, r.URL.String())
 
 	switch r.Method {
-	case "GET":
-		// Handle webhook validation
-		mode := r.URL.Query().Get("hub.mode")
-		token := r.URL.Query().Get("hub.verify_token")
+	case http.MethodGet:
+		// Handle Strava's webhook verification
 		challenge := r.URL.Query().Get("hub.challenge")
-
-		log.Printf("Webhook validation request - Mode: %s, Token: %s, Challenge: %s",
-			mode, token, challenge)
-
-		if mode != "subscribe" || token != h.verifyToken {
-			log.Printf("Invalid webhook validation - Expected token: %s, Got: %s",
-				h.verifyToken, token)
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+		if challenge != "" {
+			log.Printf("Received webhook verification challenge: %s", challenge)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"hub.challenge": challenge,
+			})
 			return
 		}
 
-		log.Printf("Webhook validation successful")
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"hub.challenge": challenge,
-		})
-
-	case "POST":
-		// Handle webhook events
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Printf("Error reading webhook body: %v", err)
-			http.Error(w, "Error reading request", http.StatusBadRequest)
-			return
-		}
-		log.Printf("Received webhook event: %s", string(body))
-
+	case http.MethodPost:
 		var event WebhookEvent
-		if err := json.Unmarshal(body, &event); err != nil {
-			log.Printf("Error parsing webhook event: %v", err)
+		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+			log.Printf("Error decoding webhook event: %v", err)
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 
-		// Process only new activities
+		// Only process 'create' events for activities
 		if event.ObjectType == "activity" && event.AspectType == "create" {
-			log.Printf("Processing new activity: ID=%d", event.ObjectID)
+			log.Printf("Processing new activity: %d", event.ObjectID)
 
-			// Get tokens from session
+			// Get athlete's tokens
 			ownerID := fmt.Sprintf("%d", event.OwnerID)
-			tokens, exists := h.store.GetTokens(ownerID)
+			tokensInterface, exists := h.store.GetTokens(ownerID)
 			if !exists {
 				log.Printf("No tokens found for athlete %s", ownerID)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
-			tokenResp, ok := tokens.(*auth.TokenResponse)
+			tokens, ok := tokensInterface.(*auth.TokenResponse)
 			if !ok {
 				log.Printf("Invalid token type for athlete %s", ownerID)
 				http.Error(w, "Invalid token data", http.StatusInternalServerError)
 				return
 			}
 
-			client := strava.NewClient(tokenResp.AccessToken, tokenResp.RefreshToken,
+			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 			activityService := service.NewActivityService(client)
 
