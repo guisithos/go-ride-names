@@ -85,7 +85,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use athlete ID as the session key
+	// Store the entire TokenResponse object
 	sessionKey := fmt.Sprintf("%d", tokenResp.Athlete.ID)
 	if err := h.store.SetTokens(sessionKey, tokenResp); err != nil {
 		log.Printf("Failed to store tokens: %v", err)
@@ -104,6 +104,7 @@ func (h *OAuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   60 * 24 * 60 * 60, // 60 days
 	})
 
+	log.Printf("Successfully authenticated athlete %d", tokenResp.Athlete.ID)
 	http.Redirect(w, r, "/dashboard", http.StatusTemporaryRedirect)
 }
 

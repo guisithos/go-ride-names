@@ -145,7 +145,16 @@ func (s *GCSStore) GetTokens(athleteID string) (interface{}, bool) {
 	}
 
 	key := fmt.Sprintf("athlete/%s/tokens.json", athleteID)
-	return s.Get(key)
+	log.Printf("DEBUG: Retrieving tokens for athlete %s", athleteID)
+
+	value, exists := s.Get(key)
+	if !exists {
+		log.Printf("DEBUG: No tokens found for athlete %s", athleteID)
+		return nil, false
+	}
+
+	log.Printf("DEBUG: Successfully retrieved tokens for athlete %s", athleteID)
+	return value, true
 }
 
 func (s *GCSStore) DeleteTokens(athleteID string) error {
