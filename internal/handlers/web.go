@@ -313,7 +313,7 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 
-	// Check both webhook subscriptions and stored status
+	// Check webhook subscriptions
 	subs, err := client.ListWebhookSubscriptions()
 	if err != nil {
 		log.Printf("Error checking subscriptions: %v", err)
@@ -321,21 +321,24 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check if we have any active subscriptions
-	active := len(subs) > 0
+	// Check if we have any active subscriptions with our callback URL
+	active := false
+	expectedCallbackURL := fmt.Sprintf("https://%s/webhook", r.Host)
+	for _, sub := range subs {
+		if sub.CallbackURL == expectedCallbackURL {
+			active = true
+			break
+		}
+	}
 
 	// Update stored status
 	statusKey := fmt.Sprintf("webhook_active:%s", athleteID)
-	if active {
-		if err := h.store.Set(statusKey, true); err != nil {
-			log.Printf("Error storing webhook status: %v", err)
-		}
-	} else {
-		h.store.Set(statusKey, nil)
+	if err := h.store.Set(statusKey, active); err != nil {
+		log.Printf("Error storing webhook status: %v", err)
 	}
 
-	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d",
-		athleteID, active, len(subs))
+	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d, ExpectedURL=%s",
+		athleteID, active, len(subs), expectedCallbackURL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
