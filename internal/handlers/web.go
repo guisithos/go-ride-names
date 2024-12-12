@@ -253,9 +253,9 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-	activityService := service.NewActivityService(client)
+	webhookService := service.NewWebhookService(client)
 
-	err = activityService.SubscribeToWebhooks(callbackURL, verifyToken)
+	err = webhookService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {
 		log.Printf("Error managing webhook subscription: %v", err)
 		http.Error(w, fmt.Sprintf("Error managing subscription: %v", err), http.StatusInternalServerError)

@@ -77,35 +77,11 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 		// Only process 'create' events for activities
 		if event.ObjectType == "activity" && event.AspectType == "create" {
-			log.Printf("Processing new activity: %d", event.ObjectID)
-
-			// Get athlete's tokens
-			ownerID := fmt.Sprintf("%d", event.OwnerID)
-			tokensInterface, exists := h.store.GetTokens(ownerID)
-			if !exists {
-				log.Printf("No tokens found for athlete %s", ownerID)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			if err := h.processActivityWebhook(event); err != nil {
+				log.Printf("Error processing webhook: %v", err)
+				http.Error(w, "Error processing webhook", http.StatusInternalServerError)
 				return
 			}
-
-			tokens, ok := tokensInterface.(*auth.TokenResponse)
-			if !ok {
-				log.Printf("Invalid token type for athlete %s", ownerID)
-				http.Error(w, "Invalid token data", http.StatusInternalServerError)
-				return
-			}
-
-			client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-				h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-			activityService := service.NewActivityService(client)
-
-			if err := activityService.RenameActivity(event.ObjectID); err != nil {
-				log.Printf("Error renaming activity: %v", err)
-				http.Error(w, "Error processing activity", http.StatusInternalServerError)
-				return
-			}
-
-			log.Printf("Successfully processed activity %d", event.ObjectID)
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -113,4 +89,28 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (h *WebhookHandler) processActivityWebhook(event WebhookEvent) error {
+	ownerID := fmt.Sprintf("%d", event.OwnerID)
+	tokensInterface, exists := h.store.GetTokens(ownerID)
+	if !exists {
+		return fmt.Errorf("no tokens found for athlete %s", ownerID)
+	}
+
+	tokenData, err := json.Marshal(tokensInterface)
+	if err != nil {
+		return fmt.Errorf("failed to marshal token data: %v", err)
+	}
+
+	var tokens auth.TokenResponse
+	if err := json.Unmarshal(tokenData, &tokens); err != nil {
+		return fmt.Errorf("failed to unmarshal token data: %v", err)
+	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	activityService := service.NewActivityService(client)
+
+	return activityService.RenameActivity(event.ObjectID)
 }
