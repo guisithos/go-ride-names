@@ -72,8 +72,19 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		// Handle Strava's webhook verification
 		challenge := r.URL.Query().Get("hub.challenge")
+		verifyToken := r.URL.Query().Get("hub.verify_token")
+
+		log.Printf("Webhook verification - Challenge: %s, Token: %s, Expected Token: %s",
+			challenge, verifyToken, h.verifyToken)
+
+		if verifyToken != h.verifyToken {
+			log.Printf("Invalid verify_token received: %s", verifyToken)
+			http.Error(w, "Invalid verification token", http.StatusBadRequest)
+			return
+		}
+
 		if challenge != "" {
-			log.Printf("Received webhook verification challenge: %s", challenge)
+			log.Printf("Responding to webhook verification challenge: %s", challenge)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{
 				"hub.challenge": challenge,

@@ -379,14 +379,23 @@ func (c *Client) DeleteWebhookSubscription(subscriptionID int64) error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := c.doRequest(req)
+	// Use httpClient.Do directly instead of doRequest
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
+	// Read the response body
+	body, _ := io.ReadAll(resp.Body)
+
+	// If status is 404, the subscription is already gone, so we can consider this a success
+	if resp.StatusCode == http.StatusNotFound {
+		log.Printf("Subscription %d already deleted or not found", subscriptionID)
+		return nil
+	}
+
 	if resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete subscription: status=%d, body=%s",
 			resp.StatusCode, string(body))
 	}
