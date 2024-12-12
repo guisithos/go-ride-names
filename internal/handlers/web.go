@@ -132,19 +132,24 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	tokens, ok := tokensInterface.(*auth.TokenResponse)
-	if !ok {
-		log.Printf("Invalid token type for athlete %s", athleteID)
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+	// Convert the stored token data to TokenResponse
+	tokenData, err := json.Marshal(tokensInterface)
+	if err != nil {
+		log.Printf("Failed to marshal token data: %v", err)
+		http.Error(w, "Invalid token data", http.StatusInternalServerError)
+		return
+	}
+
+	var tokens auth.TokenResponse
+	if err := json.Unmarshal(tokenData, &tokens); err != nil {
+		log.Printf("Failed to unmarshal token data: %v", err)
+		http.Error(w, "Invalid token format", http.StatusInternalServerError)
 		return
 	}
 
 	// Create Strava client
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-
-	// Use existing ActivityService
-	activityService := service.NewActivityService(client)
 
 	// Get recent activities
 	activities, err := client.GetAthleteActivities(1, 30, 0, 0)
@@ -157,7 +162,10 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 	// Rename activities
 	renamed := 0
 	for _, activity := range activities {
-		if err := activityService.RenameActivity(activity.ID); err != nil {
+		// Generate new name based on activity type
+		newName := generateActivityName(activity.Type)
+
+		if err := client.UpdateActivity(activity.ID, newName); err != nil {
 			log.Printf("Error renaming activity %d: %v", activity.ID, err)
 			continue
 		}
@@ -170,6 +178,24 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		"success": true,
 		"renamed": renamed,
 	})
+}
+
+// Add this helper function to generate activity names
+func generateActivityName(activityType string) string {
+	// Add your activity name generation logic here
+	// For example:
+	switch activityType {
+	case "Run":
+		return "Corrida do dia"
+	case "Ride":
+		return "Pedalada do dia"
+	case "WeightTraining":
+		return "Treino de força"
+	case "Workout":
+		return "Treino de força"
+	default:
+		return fmt.Sprintf("Treino de %s", activityType)
+	}
 }
 
 func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
