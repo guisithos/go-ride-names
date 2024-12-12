@@ -201,4 +201,12 @@ body {
     margin-top: 10px;
 }
 
+.btn.danger {
+    background-color: #dc3545;
+}
+
+.btn.danger:hover {
+    background-color: #c82333;
+}
+
 /* ... rest of the CSS ... */ 

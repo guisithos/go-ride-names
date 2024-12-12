@@ -38,7 +38,7 @@ type UpdateActivityRequest struct {
 }
 
 type WebhookSubscription struct {
-	ID            int    `json:"id"`
+	ID            int64  `json:"id"`
 	ApplicationID int    `json:"application_id"`
 	CallbackURL   string `json:"callback_url"`
 	VerifyToken   string `json:"verify_token"`
@@ -312,6 +312,8 @@ func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
 	q.Set("client_secret", c.clientSecret)
 	u.RawQuery = q.Encode()
 
+	log.Printf("Listing webhook subscriptions - URL: %s", u.String())
+
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
@@ -322,6 +324,13 @@ func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Log the raw response
+	body, _ := io.ReadAll(resp.Body)
+	log.Printf("List subscriptions response: Status=%d, Body=%s", resp.StatusCode, string(body))
+
+	// Create new reader for JSON decoder
+	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	var subscriptions []WebhookSubscription
 	if err := json.NewDecoder(resp.Body).Decode(&subscriptions); err != nil {
@@ -354,4 +363,33 @@ func (c *Client) GetActivities() ([]Activity, error) {
 	}
 
 	return activities, nil
+}
+
+func (c *Client) DeleteWebhookSubscription(subscriptionID int64) error {
+	data := url.Values{}
+	data.Set("client_id", c.clientID)
+	data.Set("client_secret", c.clientSecret)
+
+	deleteURL := fmt.Sprintf("%s/%d", webhookSubscriptionURL, subscriptionID)
+
+	req, err := http.NewRequest("DELETE", deleteURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete subscription: status=%d, body=%s",
+			resp.StatusCode, string(body))
+	}
+
+	return nil
 }

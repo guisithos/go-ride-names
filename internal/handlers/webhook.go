@@ -54,9 +54,19 @@ func (h *WebhookHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
-	// Log full request details
+	// Log full request details including body for all methods
 	log.Printf("Webhook received: Method=%s, URL=%s, Headers=%v",
 		r.Method, r.URL.String(), r.Header)
+
+	// Read and log the body for all requests
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading request body: %v", err)
+	} else if len(body) > 0 {
+		log.Printf("Request body: %s", string(body))
+	}
+	// Restore the body for further processing
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	switch r.Method {
 	case http.MethodGet:
