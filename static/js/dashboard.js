@@ -239,17 +239,24 @@ document.getElementById('subscribe').addEventListener('click', async function() 
     button.innerHTML = '<span>Ativando...</span>';
     
     try {
+        console.log('Sending subscribe request...');
         const response = await fetch('/subscribe', {
             method: 'POST'
         });
 
         if (!response.ok) {
-            throw new Error('Failed to subscribe');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to subscribe');
         }
 
-        checkSubscriptionStatus();
+        const data = await response.json();
+        console.log('Subscribe response:', data);
+
+        // Force an immediate status check
+        await checkSubscriptionStatus();
     } catch (error) {
         console.error('Error:', error);
+        alert('Erro ao ativar auto-renomeação. Por favor, tente novamente.');
     } finally {
         button.disabled = false;
         button.innerHTML = '<span>Ativar Auto-Renomeação</span>';
