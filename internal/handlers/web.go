@@ -321,8 +321,21 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Consider any subscription as active, regardless of URL
-	active := len(subs) > 0
+	// Get base URL from request or environment
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://" + r.Host
+	}
+	expectedCallbackURL := baseURL + "/webhook"
+
+	// Check if we have a subscription with our current domain
+	active := false
+	for _, sub := range subs {
+		if sub.CallbackURL == expectedCallbackURL {
+			active = true
+			break
+		}
+	}
 
 	// Update stored status
 	statusKey := fmt.Sprintf("webhook_active:%s", athleteID)
@@ -330,8 +343,8 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
-	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d",
-		athleteID, active, len(subs))
+	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d, ExpectedURL=%s",
+		athleteID, active, len(subs), expectedCallbackURL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
@@ -374,12 +387,20 @@ func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-	webhookService := service.NewWebhookService(client)
 
-	if err := webhookService.UnsubscribeFromWebhooks(); err != nil {
-		log.Printf("Error unsubscribing from webhooks: %v", err)
-		http.Error(w, "Failed to unsubscribe", http.StatusInternalServerError)
+	// Force deletion of all subscriptions
+	subs, err := client.ListWebhookSubscriptions()
+	if err != nil {
+		log.Printf("Error listing subscriptions: %v", err)
+		http.Error(w, "Failed to list subscriptions", http.StatusInternalServerError)
 		return
+	}
+
+	for _, sub := range subs {
+		log.Printf("Attempting to delete subscription ID: %d with URL: %s", sub.ID, sub.CallbackURL)
+		if err := client.DeleteWebhookSubscription(sub.ID); err != nil {
+			log.Printf("Warning: failed to delete subscription %d: %v", sub.ID, err)
+		}
 	}
 
 	// Remove subscription status from store
