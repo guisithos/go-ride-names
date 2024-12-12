@@ -332,23 +332,20 @@ func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
 }
 
 func (c *Client) GetActivities() ([]Activity, error) {
-	url := fmt.Sprintf("%s/athlete/activities", baseURL)
-
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", activitiesURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
-
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed with status: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var activities []Activity
