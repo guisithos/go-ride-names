@@ -63,21 +63,22 @@ func (s *GCSStore) Close() error {
 func (s *GCSStore) Set(key string, value interface{}) error {
 	data, err := json.Marshal(value)
 	if err != nil {
-		log.Printf("Failed to marshal value: %v", err)
-		return fmt.Errorf("failed to marshal value: %v", err)
+		log.Printf("ERROR: Failed to marshal value: %v", err)
+		return fmt.Errorf("marshal error: %v", err)
 	}
 
 	obj := s.client.Bucket(s.bucketName).Object(key)
 	w := obj.NewWriter(s.ctx)
 
+	log.Printf("DEBUG: Writing to key: %s", key)
 	if _, err := w.Write(data); err != nil {
-		log.Printf("Failed to write to GCS: %v", err)
-		return fmt.Errorf("failed to write to GCS: %v", err)
+		log.Printf("ERROR: Failed to write to GCS: %v", err)
+		return fmt.Errorf("write error: %v", err)
 	}
 
 	if err := w.Close(); err != nil {
-		log.Printf("Failed to close GCS writer: %v", err)
-		return fmt.Errorf("failed to close GCS writer: %v", err)
+		log.Printf("ERROR: Failed to close GCS writer: %v", err)
+		return fmt.Errorf("close error: %v", err)
 	}
 
 	return nil
@@ -123,23 +124,17 @@ func (s *GCSStore) Delete(key string) error {
 
 // TokenStore implementation
 func (s *GCSStore) SetTokens(athleteID string, tokens interface{}) error {
-	if athleteID == "" {
-		return fmt.Errorf("athlete ID cannot be empty")
-	}
-	if tokens == nil {
-		return fmt.Errorf("tokens cannot be nil")
-	}
-
 	key := fmt.Sprintf("athlete/%s/tokens.json", athleteID)
-	log.Printf("Attempting to store tokens at key: %s", key)
+	log.Printf("DEBUG: Attempting to store tokens for athlete %s", athleteID)
+	log.Printf("DEBUG: Using bucket: %s", s.bucketName)
 
 	err := s.Set(key, tokens)
 	if err != nil {
-		log.Printf("Failed to store tokens in GCS: %v", err)
-		return err
+		log.Printf("ERROR: Failed to store tokens in GCS: %v", err)
+		return fmt.Errorf("storage error: %v", err)
 	}
 
-	log.Printf("Successfully stored tokens in GCS")
+	log.Printf("SUCCESS: Stored tokens for athlete %s", athleteID)
 	return nil
 }
 
