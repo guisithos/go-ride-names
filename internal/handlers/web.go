@@ -147,55 +147,25 @@ func (h *WebHandler) handleRenameActivities(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Create Strava client
+	// Create Strava client and ActivityService
 	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	activityService := service.NewActivityService(client)
 
-	// Get recent activities
-	activities, err := client.GetAthleteActivities(1, 30, 0, 0)
+	// Get recent activities and update their names
+	activities, err := activityService.ListActivities(1, 30, 0, 0, true)
 	if err != nil {
-		log.Printf("Error fetching activities: %v", err)
-		http.Error(w, "Failed to fetch activities", http.StatusInternalServerError)
+		log.Printf("Error processing activities: %v", err)
+		http.Error(w, "Failed to process activities", http.StatusInternalServerError)
 		return
 	}
 
-	// Rename activities
-	renamed := 0
-	for _, activity := range activities {
-		// Generate new name based on activity type
-		newName := generateActivityName(activity.Type)
-
-		if err := client.UpdateActivity(activity.ID, newName); err != nil {
-			log.Printf("Error renaming activity %d: %v", activity.ID, err)
-			continue
-		}
-		renamed++
-	}
-
-	log.Printf("Successfully renamed %d activities for athlete %s", renamed, athleteID)
+	log.Printf("Successfully processed activities for athlete %s", athleteID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"renamed": renamed,
+		"renamed": len(activities),
 	})
-}
-
-// Add this helper function to generate activity names
-func generateActivityName(activityType string) string {
-	// Add your activity name generation logic here
-	// For example:
-	switch activityType {
-	case "Run":
-		return "Corrida do dia"
-	case "Ride":
-		return "Pedalada do dia"
-	case "WeightTraining":
-		return "Treino de força"
-	case "Workout":
-		return "Treino de força"
-	default:
-		return fmt.Sprintf("Treino de %s", activityType)
-	}
 }
 
 func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
