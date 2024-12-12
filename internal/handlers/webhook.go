@@ -54,19 +54,9 @@ func (h *WebhookHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
-	// Log full request details including body for all methods
+	// Log full request details
 	log.Printf("Webhook received: Method=%s, URL=%s, Headers=%v",
 		r.Method, r.URL.String(), r.Header)
-
-	// Read and log the body for all requests
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Error reading request body: %v", err)
-	} else if len(body) > 0 {
-		log.Printf("Request body: %s", string(body))
-	}
-	// Restore the body for further processing
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	switch r.Method {
 	case http.MethodGet:
@@ -74,25 +64,16 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		challenge := r.URL.Query().Get("hub.challenge")
 		verifyToken := r.URL.Query().Get("hub.verify_token")
 
-		log.Printf("Webhook verification - Challenge: %s, Token: %s, Expected Token: %s",
-			challenge, verifyToken, h.verifyToken)
-
-		if verifyToken != h.verifyToken {
-			log.Printf("Invalid verify_token received: %s", verifyToken)
-			http.Error(w, "Invalid verification token", http.StatusBadRequest)
-			return
-		}
+		log.Printf("Webhook verification - Challenge: %s, Token: %s",
+			challenge, verifyToken)
 
 		if challenge != "" {
-			log.Printf("Responding to webhook verification challenge: %s", challenge)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{
 				"hub.challenge": challenge,
 			})
 			return
 		}
-		http.Error(w, "Invalid verification request", http.StatusBadRequest)
-		return
 
 	case http.MethodPost:
 		body, err := io.ReadAll(r.Body)

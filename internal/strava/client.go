@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -228,14 +229,27 @@ func (c *Client) UpdateActivity(activityID int64, name string) error {
 }
 
 func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*WebhookSubscription, error) {
+	// Always delete ALL existing subscriptions first
+	subs, err := c.ListWebhookSubscriptions()
+	if err == nil {
+		for _, sub := range subs {
+			log.Printf("Deleting existing subscription ID: %d (URL: %s)", sub.ID, sub.CallbackURL)
+			err := c.DeleteWebhookSubscription(sub.ID)
+			if err != nil {
+				log.Printf("Warning: failed to delete subscription %d: %v", sub.ID, err)
+			}
+		}
+	}
+
+	// Wait a moment to ensure deletion is processed
+	time.Sleep(time.Second)
+
+	// Now create the new subscription
 	data := url.Values{}
 	data.Set("client_id", c.clientID)
 	data.Set("client_secret", c.clientSecret)
 	data.Set("callback_url", callbackURL)
 	data.Set("verify_token", verifyToken)
-
-	log.Printf("Creating webhook subscription - URL: %s, Client ID: %s, Callback URL: %s",
-		webhookSubscriptionURL, c.clientID, callbackURL)
 
 	req, err := http.NewRequest("POST", webhookSubscriptionURL, strings.NewReader(data.Encode()))
 	if err != nil {
@@ -244,33 +258,25 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// Add authorization header
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
-
-	// Log request details
-	log.Printf("Request headers: %v", req.Header)
-	log.Printf("Request body: %s", data.Encode())
-
-	// Use doRequest instead of httpClient.Do directly
-	resp, err := c.doRequest(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	log.Printf("Strava API response: Status=%d, Body=%s", resp.StatusCode, string(body))
+	log.Printf("Create subscription response: Status=%d, Body=%s", resp.StatusCode, string(body))
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("failed to create subscription: status=%d, body=%s", resp.StatusCode, string(body))
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to create subscription: status=%d, body=%s",
+			resp.StatusCode, string(body))
 	}
 
 	var subscription WebhookSubscription
-	if err := json.Unmarshal(body, &subscription); err != nil {
-		return nil, fmt.Errorf("error decoding response: %v, body: %s", err, string(body))
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&subscription); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
 	}
 
-	log.Printf("Successfully created subscription with ID: %d", subscription.ID)
 	return &subscription, nil
 }
 
@@ -366,36 +372,31 @@ func (c *Client) GetActivities() ([]Activity, error) {
 }
 
 func (c *Client) DeleteWebhookSubscription(subscriptionID int64) error {
-	data := url.Values{}
-	data.Set("client_id", c.clientID)
-	data.Set("client_secret", c.clientSecret)
+	// Build the URL with query parameters instead of form data
+	deleteURL := fmt.Sprintf("%s/%d?client_id=%s&client_secret=%s",
+		webhookSubscriptionURL,
+		subscriptionID,
+		c.clientID,
+		c.clientSecret)
 
-	deleteURL := fmt.Sprintf("%s/%d", webhookSubscriptionURL, subscriptionID)
-
-	req, err := http.NewRequest("DELETE", deleteURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("DELETE", deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	// Use httpClient.Do directly instead of doRequest
+	// Make the request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
+	// Read response body for error reporting
 	body, _ := io.ReadAll(resp.Body)
+	log.Printf("Delete subscription response: Status=%d, Body=%s", resp.StatusCode, string(body))
 
-	// If status is 404, the subscription is already gone, so we can consider this a success
-	if resp.StatusCode == http.StatusNotFound {
-		log.Printf("Subscription %d already deleted or not found", subscriptionID)
-		return nil
-	}
-
-	if resp.StatusCode != http.StatusNoContent {
+	// Consider both 204 (success) and 404 (already deleted) as success
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
 		return fmt.Errorf("failed to delete subscription: status=%d, body=%s",
 			resp.StatusCode, string(body))
 	}
