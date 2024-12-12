@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
+	"strings"
 	"time"
 
 	"github.com/guisithos/go-ride-names/internal/strava"
@@ -133,7 +133,7 @@ func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) e
 	subscriptions, err := s.client.ListWebhookSubscriptions()
 	if err != nil {
 		log.Printf("Error listing subscriptions: %v", err)
-		// Continue anyway, as the error might be due to permissions
+		return err
 	}
 
 	// Check if we already have a subscription with this callback URL
@@ -145,26 +145,18 @@ func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) e
 		}
 	}
 
-	log.Printf("No existing subscription found, creating new one with callback URL: %s", callbackURL)
-
-	// Verify the callback URL is accessible
-	resp, err := http.Get(callbackURL)
-	if err != nil {
-		log.Printf("Warning: Callback URL may not be accessible: %v", err)
-	} else {
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusMethodNotAllowed {
-			log.Printf("Warning: Callback URL returned status %d", resp.StatusCode)
-		}
-	}
-
+	// Only create new subscription if one doesn't exist
 	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {
-		log.Printf("Error creating webhook subscription: %v", err)
-		return err
+		// If error is "already exists", treat as success
+		if strings.Contains(err.Error(), "already exists") {
+			log.Printf("Subscription already exists, treating as success")
+			return nil
+		}
+		return fmt.Errorf("failed to create subscription: %v", err)
 	}
 
-	log.Printf("Successfully created webhook subscription: ID=%d", subscription.ID)
+	log.Printf("Successfully created new webhook subscription: ID=%d", subscription.ID)
 	s.webhookSubscription = subscription
 	return nil
 }
@@ -177,8 +169,21 @@ func (s *ActivityService) RenameActivity(activityID int64) error {
 		return fmt.Errorf("failed to get activity: %v", err)
 	}
 
-	// Generate a fun name based on activity type
-	newName := generateFunName(activity.Type)
+	// Only rename if it has a default name
+	if !defaultActivityNames[activity.Name] {
+		log.Printf("Activity '%s' doesn't have a default name, skipping", activity.Name)
+		return nil
+	}
+
+	// Use our existing name generation logic
+	activityType := getActivityType(activity.Name, activity.SportType)
+	newName := getRandomJoke(activityType)
+
+	// Log the name change
+	log.Printf("Updating activity name:\n  From: %s\n  Type: %s\n  To:   %s\n",
+		activity.Name,
+		activityType,
+		newName)
 
 	// Update activity name
 	if err := s.client.UpdateActivity(activityID, newName); err != nil {
@@ -186,11 +191,4 @@ func (s *ActivityService) RenameActivity(activityID int64) error {
 	}
 
 	return nil
-}
-
-// generateFunName creates a fun name based on activity type
-func generateFunName(activityType string) string {
-	// Add your fun name generation logic here
-	// For now, return a simple placeholder
-	return fmt.Sprintf("Zoeira do %s", activityType)
 }
