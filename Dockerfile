@@ -37,3 +37,6 @@ RUN mkdir -p /app/static/favicon /app/static/css /app/static/js /app/templates
 # Copy static and template files
 COPY static/ /app/static/
 COPY templates/ /app/templates/
+
+# Copy service account key
+COPY zoatleta-sa-key.json /app/zoatleta-sa-key.json
