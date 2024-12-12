@@ -70,6 +70,8 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		http.Error(w, "Invalid verification request", http.StatusBadRequest)
+		return
 
 	case http.MethodPost:
 		body, err := io.ReadAll(r.Body)
@@ -80,7 +82,7 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		// Log the raw webhook payload
 		log.Printf("Received webhook payload: %s", string(body))
-		r.Body = io.NopCloser(bytes.NewBuffer(body)) // Replace the body for later use
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 		var event WebhookEvent
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -90,7 +92,7 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Log the decoded event
-		log.Printf("Decoded webhook event: Type=%s, ID=%d, AspectType=%s, OwnerID=%d",
+		log.Printf("Processing webhook event: Type=%s, ID=%d, AspectType=%s, OwnerID=%d",
 			event.ObjectType, event.ObjectID, event.AspectType, event.OwnerID)
 
 		if event.ObjectType == "activity" && event.AspectType == "create" {
@@ -100,9 +102,13 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log.Printf("Successfully processed webhook for activity %d", event.ObjectID)
+		} else {
+			log.Printf("Skipping event: not a new activity (Type=%s, Aspect=%s)",
+				event.ObjectType, event.AspectType)
 		}
 
 		w.WriteHeader(http.StatusOK)
+		return
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
