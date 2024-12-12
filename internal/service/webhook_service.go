@@ -55,5 +55,12 @@ func (s *WebhookService) GetSubscriptionStatus() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
+	// Log subscription details
+	for _, sub := range subscriptions {
+		log.Printf("Found subscription: ID=%d, CallbackURL=%s",
+			sub.ID, sub.CallbackURL)
+	}
+
 	return len(subscriptions) > 0, nil
 }

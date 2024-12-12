@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -52,7 +54,9 @@ func (h *WebhookHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received webhook request: Method=%s, URL=%s", r.Method, r.URL.String())
+	// Log full request details
+	log.Printf("Webhook received: Method=%s, URL=%s, Headers=%v",
+		r.Method, r.URL.String(), r.Header)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -68,6 +72,16 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodPost:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error reading webhook body: %v", err)
+			http.Error(w, "Error reading request", http.StatusBadRequest)
+			return
+		}
+		// Log the raw webhook payload
+		log.Printf("Received webhook payload: %s", string(body))
+		r.Body = io.NopCloser(bytes.NewBuffer(body)) // Replace the body for later use
+
 		var event WebhookEvent
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 			log.Printf("Error decoding webhook event: %v", err)
@@ -75,13 +89,17 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Only process 'create' events for activities
+		// Log the decoded event
+		log.Printf("Decoded webhook event: Type=%s, ID=%d, AspectType=%s, OwnerID=%d",
+			event.ObjectType, event.ObjectID, event.AspectType, event.OwnerID)
+
 		if event.ObjectType == "activity" && event.AspectType == "create" {
 			if err := h.processActivityWebhook(event); err != nil {
 				log.Printf("Error processing webhook: %v", err)
 				http.Error(w, "Error processing webhook", http.StatusInternalServerError)
 				return
 			}
+			log.Printf("Successfully processed webhook for activity %d", event.ObjectID)
 		}
 
 		w.WriteHeader(http.StatusOK)
