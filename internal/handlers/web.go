@@ -191,10 +191,18 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, ok := tokensInterface.(*auth.TokenResponse)
-	if !ok {
-		log.Printf("Invalid token type for athlete %s", athleteID)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// Convert stored tokens to TokenResponse
+	tokenData, err := json.Marshal(tokensInterface)
+	if err != nil {
+		log.Printf("Failed to marshal token data: %v", err)
+		http.Error(w, "Invalid token data", http.StatusInternalServerError)
+		return
+	}
+
+	var tokens auth.TokenResponse
+	if err := json.Unmarshal(tokenData, &tokens); err != nil {
+		log.Printf("Failed to unmarshal token data: %v", err)
+		http.Error(w, "Invalid token format", http.StatusInternalServerError)
 		return
 	}
 
