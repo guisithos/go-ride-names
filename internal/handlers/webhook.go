@@ -64,16 +64,29 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		challenge := r.URL.Query().Get("hub.challenge")
 		verifyToken := r.URL.Query().Get("hub.verify_token")
 
-		log.Printf("Webhook verification - Challenge: %s, Token: %s",
-			challenge, verifyToken)
+		log.Printf("Webhook verification - Challenge: %s, Token: %s, Expected Token: %s",
+			challenge, verifyToken, h.verifyToken)
 
+		// First verify the token
+		if verifyToken != h.verifyToken {
+			log.Printf("Invalid verify_token received: %s, expected: %s",
+				verifyToken, h.verifyToken)
+			http.Error(w, "Invalid verification token", http.StatusBadRequest)
+			return
+		}
+
+		// Then handle the challenge
 		if challenge != "" {
+			log.Printf("Responding to webhook verification challenge: %s", challenge)
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{
 				"hub.challenge": challenge,
 			})
 			return
 		}
+
+		http.Error(w, "Missing challenge parameter", http.StatusBadRequest)
+		return
 
 	case http.MethodPost:
 		body, err := io.ReadAll(r.Body)
