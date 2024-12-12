@@ -110,6 +110,8 @@ func (h *WebhookHandler) handleWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebhookHandler) processActivityWebhook(event WebhookEvent) error {
+	log.Printf("Starting to process activity webhook for ID=%d", event.ObjectID)
+
 	ownerID := fmt.Sprintf("%d", event.OwnerID)
 	tokensInterface, exists := h.store.GetTokens(ownerID)
 	if !exists {
@@ -130,5 +132,11 @@ func (h *WebhookHandler) processActivityWebhook(event WebhookEvent) error {
 		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
 	activityService := service.NewActivityService(client)
 
-	return activityService.RenameActivity(event.ObjectID)
+	log.Printf("Attempting to rename activity %d", event.ObjectID)
+	if err := activityService.RenameActivity(event.ObjectID); err != nil {
+		return fmt.Errorf("failed to rename activity: %v", err)
+	}
+
+	log.Printf("Successfully renamed activity %d", event.ObjectID)
+	return nil
 }
