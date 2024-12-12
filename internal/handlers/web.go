@@ -321,21 +321,8 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get base URL from request or environment
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://" + r.Host
-	}
-	expectedCallbackURL := baseURL + "/webhook"
-
-	// Check if we have a subscription with our current domain
-	active := false
-	for _, sub := range subs {
-		if sub.CallbackURL == expectedCallbackURL {
-			active = true
-			break
-		}
-	}
+	// Consider any subscription as active for this athlete
+	active := len(subs) > 0
 
 	// Update stored status
 	statusKey := fmt.Sprintf("webhook_active:%s", athleteID)
@@ -343,8 +330,8 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		log.Printf("Error storing webhook status: %v", err)
 	}
 
-	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d, ExpectedURL=%s",
-		athleteID, active, len(subs), expectedCallbackURL)
+	log.Printf("Subscription status for athlete %s: Active=%v, Subs=%d",
+		athleteID, active, len(subs))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
