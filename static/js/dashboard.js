@@ -289,6 +289,7 @@ document.getElementById('unsubscribe').addEventListener('click', async function(
     button.innerHTML = '<span>Desativando...</span>';
     
     try {
+        console.log('Sending unsubscribe request...');
         const response = await fetch('/unsubscribe', {
             method: 'POST'
         });
@@ -297,7 +298,11 @@ document.getElementById('unsubscribe').addEventListener('click', async function(
             throw new Error('Failed to unsubscribe');
         }
 
-        checkSubscriptionStatus();
+        const data = await response.json();
+        console.log('Unsubscribe response:', data);
+
+        // Force an immediate status check
+        await checkSubscriptionStatus();
     } catch (error) {
         console.error('Error:', error);
         alert('Erro ao desativar auto-renomeação. Por favor, tente novamente.');
