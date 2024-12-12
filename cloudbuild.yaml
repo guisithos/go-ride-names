@@ -32,7 +32,8 @@ steps:
         BASE_URL=https://zoatleta.tech,
         OAUTH_REDIRECT_URI=https://zoatleta.tech/callback,
         WEBHOOK_VERIFY_TOKEN=strava-webhook-verify-token-123,
-        GCS_BUCKET_NAME=zoatleta-storage
+        GCS_BUCKET_NAME=zoatleta-storage,
+        GOOGLE_APPLICATION_CREDENTIALS=/app/zoatleta-sa-key.json
 
 images:
   - 'gcr.io/$PROJECT_ID/zoatleta'
