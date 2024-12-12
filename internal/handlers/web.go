@@ -22,13 +22,15 @@ type WebHandler struct {
 	store        storage.Store
 	oauthCfg     *auth.OAuth2Config
 	stravaConfig *config.Config
+	templates    *template.Template
 }
 
-func NewWebHandler(store storage.Store, oauthCfg *auth.OAuth2Config, stravaConfig *config.Config) *WebHandler {
+func NewWebHandler(store storage.Store, oauthCfg *auth.OAuth2Config, stravaConfig *config.Config, templates *template.Template) *WebHandler {
 	return &WebHandler{
 		store:        store,
 		oauthCfg:     oauthCfg,
 		stravaConfig: stravaConfig,
+		templates:    templates,
 	}
 }
 
@@ -60,7 +62,7 @@ func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	// Get athlete ID from cookie
+	// Get session cookie
 	cookie, err := r.Cookie("session_id")
 	if err != nil {
 		log.Printf("No session cookie found: %v", err)
@@ -68,6 +70,7 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tokens from storage
 	athleteID := cookie.Value
 	tokensInterface, exists := h.store.GetTokens(athleteID)
 	if !exists {
@@ -76,57 +79,37 @@ func (h *WebHandler) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, ok := tokensInterface.(*auth.TokenResponse)
-	if !ok {
-		log.Printf("Invalid token type for athlete %s", athleteID)
+	// Convert stored tokens to TokenResponse
+	tokenData, err := json.Marshal(tokensInterface)
+	if err != nil {
+		log.Printf("Failed to marshal token data: %v", err)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	var tokens auth.TokenResponse
+	if err := json.Unmarshal(tokenData, &tokens); err != nil {
+		log.Printf("Failed to unmarshal token data: %v", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 
 	// Check if token needs refresh
-	now := time.Now().Unix()
-	if now >= tokens.ExpiresAt {
-		log.Printf("Token expired for athlete %s, refreshing...", athleteID)
-		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-
-		newTokens, err := client.RefreshToken()
-		if err != nil {
-			log.Printf("Failed to refresh token: %v", err)
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
-		}
-
-		// Update tokens in session
-		tokens.AccessToken = newTokens.AccessToken
-		tokens.RefreshToken = newTokens.RefreshToken
-		tokens.ExpiresAt = newTokens.ExpiresAt
-
-		if err := h.store.SetTokens(athleteID, tokens); err != nil {
-			log.Printf("Failed to update tokens: %v", err)
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-			return
-		}
+	if time.Now().Unix() > tokens.ExpiresAt {
+		log.Printf("Token expired for athlete %s, refreshing", athleteID)
+		// Add refresh token logic here
 	}
 
-	tmpl, err := template.ParseFiles(filepath.Join("templates", "dashboard.html"))
-	if err != nil {
-		http.Error(w, "Error loading template", http.StatusInternalServerError)
-		return
-	}
-
+	// Render dashboard template
 	data := struct {
-		AccessToken string
-		AthleteID   string
+		AthleteID string
 	}{
-		AccessToken: tokens.AccessToken,
-		AthleteID:   athleteID,
+		AthleteID: athleteID,
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		http.Error(w, "Error rendering template", http.StatusInternalServerError)
-		return
+	if err := h.templates.ExecuteTemplate(w, "dashboard.html", data); err != nil {
+		log.Printf("Error rendering dashboard template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 

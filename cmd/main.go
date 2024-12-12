@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/guisithos/go-ride-names/internal/auth"
 	"github.com/guisithos/go-ride-names/internal/config"
@@ -35,6 +37,12 @@ func main() {
 	}
 	defer store.Close()
 
+	// Initialize templates
+	templates, err := template.ParseGlob(filepath.Join("templates", "*.html"))
+	if err != nil {
+		log.Fatalf("Failed to parse templates: %v", err)
+	}
+
 	// Initialize handlers
 	mux := http.NewServeMux()
 
@@ -46,8 +54,8 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(store, cfg)
 	webhookHandler.RegisterRoutes(mux)
 
-	// Setup web handler
-	webHandler := handlers.NewWebHandler(store, oauthHandler.GetConfig(), cfg)
+	// Setup web handler with templates
+	webHandler := handlers.NewWebHandler(store, oauthHandler.GetConfig(), cfg, templates)
 	webHandler.RegisterRoutes(mux)
 
 	// Add static file serving
