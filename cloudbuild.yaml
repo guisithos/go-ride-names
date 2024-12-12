@@ -34,12 +34,12 @@ steps:
       - '--set-secrets'
       - >-
         STRAVA_CLIENT_ID=STRAVA_CLIENT_ID:latest,
-        STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest
+        STRAVA_CLIENT_SECRET=STRAVA_CLIENT_SECRET:latest,
+        WEBHOOK_VERIFY_TOKEN=WEBHOOK_VERIFY_TOKEN:latest
       - '--set-env-vars'
       - >-
         BASE_URL=https://zoatleta.tech,
         OAUTH_REDIRECT_URI=https://zoatleta.tech/callback,
-        WEBHOOK_VERIFY_TOKEN=strava-webhook-verify-token-123,
         GCS_BUCKET_NAME=zoatleta-storage,
         GOOGLE_APPLICATION_CREDENTIALS=/app/zoatleta-sa-key.json
 

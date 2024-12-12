@@ -40,6 +40,7 @@ func (h *WebHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/rename-activities", h.handleRenameActivities)
 	mux.HandleFunc("/subscribe", h.handleSubscribe)
 	mux.HandleFunc("/subscription-status", h.handleSubscriptionStatus)
+	mux.HandleFunc("/unsubscribe", h.handleUnsubscribe)
 }
 
 func (h *WebHandler) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -338,4 +339,57 @@ func (h *WebHandler) handleSubscriptionStatus(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"active": active})
+}
+
+func (h *WebHandler) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Printf("No session cookie found: %v", err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	athleteID := cookie.Value
+	tokensInterface, exists := h.store.GetTokens(athleteID)
+	if !exists {
+		log.Printf("No tokens found for athlete %s", athleteID)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokenData, err := json.Marshal(tokensInterface)
+	if err != nil {
+		log.Printf("Failed to marshal token data: %v", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	var tokens auth.TokenResponse
+	if err := json.Unmarshal(tokenData, &tokens); err != nil {
+		log.Printf("Failed to unmarshal token data: %v", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	webhookService := service.NewWebhookService(client)
+
+	if err := webhookService.UnsubscribeFromWebhooks(); err != nil {
+		log.Printf("Error unsubscribing from webhooks: %v", err)
+		http.Error(w, "Failed to unsubscribe", http.StatusInternalServerError)
+		return
+	}
+
+	// Remove subscription status from store
+	statusKey := fmt.Sprintf("webhook_active:%s", athleteID)
+	h.store.Set(statusKey, nil)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"active": false})
 }

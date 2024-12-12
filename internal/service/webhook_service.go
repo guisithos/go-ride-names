@@ -64,3 +64,19 @@ func (s *WebhookService) GetSubscriptionStatus() (bool, error) {
 
 	return len(subscriptions) > 0, nil
 }
+
+func (s *WebhookService) UnsubscribeFromWebhooks() error {
+	subscriptions, err := s.client.ListWebhookSubscriptions()
+	if err != nil {
+		return fmt.Errorf("error listing subscriptions: %v", err)
+	}
+
+	for _, sub := range subscriptions {
+		log.Printf("Deleting subscription ID: %d", sub.ID)
+		if err := s.client.DeleteWebhookSubscription(sub.ID); err != nil {
+			return fmt.Errorf("error deleting subscription %d: %v", sub.ID, err)
+		}
+	}
+
+	return nil
+}
