@@ -208,16 +208,25 @@ document.getElementById('rename').addEventListener('click', async function() {
     
     try {
         const response = await fetch('/rename-activities', {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
 
         if (!response.ok) {
-            throw new Error('Failed to rename activities');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Failed to rename activities');
         }
 
-        loadActivities(); // Reload activities after renaming
+        const result = await response.json();
+        console.log(`Successfully renamed ${result.renamed} activities`);
+        
+        // Reload activities to show new names
+        await loadActivities();
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error renaming activities:', error);
+        alert('Erro ao renomear atividades. Por favor, tente novamente.');
     } finally {
         button.disabled = false;
         button.innerHTML = '<span>Renomear Todas</span>';

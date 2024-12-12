@@ -330,3 +330,31 @@ func (c *Client) ListWebhookSubscriptions() ([]WebhookSubscription, error) {
 
 	return subscriptions, nil
 }
+
+func (c *Client) GetActivities() ([]Activity, error) {
+	url := fmt.Sprintf("%s/athlete/activities", baseURL)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed with status: %d", resp.StatusCode)
+	}
+
+	var activities []Activity
+	if err := json.NewDecoder(resp.Body).Decode(&activities); err != nil {
+		return nil, fmt.Errorf("error decoding response: %v", err)
+	}
+
+	return activities, nil
+}
