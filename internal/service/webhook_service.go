@@ -28,14 +28,15 @@ func (s *WebhookService) SubscribeToWebhooks(callbackURL, verifyToken string) er
 		return err
 	}
 
+	// Delete any existing subscriptions regardless of URL
 	for _, sub := range subscriptions {
-		if sub.CallbackURL == callbackURL {
-			log.Printf("Found existing subscription with ID: %d", sub.ID)
-			s.webhookSubscription = &sub
-			return nil
+		log.Printf("Deleting old subscription ID: %d with URL: %s", sub.ID, sub.CallbackURL)
+		if err := s.client.DeleteWebhookSubscription(sub.ID); err != nil {
+			log.Printf("Warning: failed to delete subscription %d: %v", sub.ID, err)
 		}
 	}
 
+	// Create new subscription with current URL
 	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
@@ -45,7 +46,8 @@ func (s *WebhookService) SubscribeToWebhooks(callbackURL, verifyToken string) er
 		return fmt.Errorf("failed to create subscription: %v", err)
 	}
 
-	log.Printf("Successfully created new webhook subscription: ID=%d", subscription.ID)
+	log.Printf("Successfully created new webhook subscription: ID=%d with URL: %s",
+		subscription.ID, callbackURL)
 	s.webhookSubscription = subscription
 	return nil
 }
