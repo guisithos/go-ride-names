@@ -43,10 +43,10 @@ var defaultActivityNames = map[string]bool{
 }
 
 type ActivityService struct {
-	client *strava.Client
+	client strava.StravaClientInterface
 }
 
-func NewActivityService(client *strava.Client) *ActivityService {
+func NewActivityService(client strava.StravaClientInterface) *ActivityService {
 	return &ActivityService{
 		client: client,
 	}

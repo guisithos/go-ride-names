@@ -44,6 +44,13 @@ type WebhookSubscription struct {
 	VerifyToken   string `json:"verify_token"`
 }
 
+type StravaClientInterface interface {
+	GetActivity(id int64) (*Activity, error)
+	UpdateActivity(id int64, name string) error
+	GetAuthenticatedAthlete() (*Athlete, error)
+	GetAthleteActivities(page, perPage int, before, after int64) ([]Activity, error)
+}
+
 func NewClient(accessToken, refreshToken, clientID, clientSecret string) *Client {
 	return &Client{
 		accessToken:  accessToken,
