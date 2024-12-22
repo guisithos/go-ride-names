@@ -192,27 +192,21 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert stored tokens to TokenResponse
-	tokenData, err := json.Marshal(tokensInterface)
+	// Use token helper
+	tokens, err := auth.UnmarshalTokens(tokensInterface)
 	if err != nil {
-		log.Printf("Failed to marshal token data: %v", err)
-		http.Error(w, "Invalid token data", http.StatusInternalServerError)
+		log.Printf("Token error: %v", err)
+		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 
-	var tokens auth.TokenResponse
-	if err := json.Unmarshal(tokenData, &tokens); err != nil {
-		log.Printf("Failed to unmarshal token data: %v", err)
-		http.Error(w, "Invalid token format", http.StatusInternalServerError)
-		return
-	}
+	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
+		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
+	webhookService := service.NewWebhookService(client)
 
 	// Check if token needs refresh
 	now := time.Now().Unix()
 	if now >= tokens.ExpiresAt {
-		client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-			h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-
 		newTokens, err := client.RefreshToken()
 		if err != nil {
 			log.Printf("Failed to refresh token: %v", err)
@@ -251,10 +245,6 @@ func (h *WebHandler) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Webhook verify token not configured", http.StatusInternalServerError)
 		return
 	}
-
-	client := strava.NewClient(tokens.AccessToken, tokens.RefreshToken,
-		h.stravaConfig.StravaClientID, h.stravaConfig.StravaClientSecret)
-	webhookService := service.NewWebhookService(client)
 
 	err = webhookService.SubscribeToWebhooks(callbackURL, verifyToken)
 	if err != nil {

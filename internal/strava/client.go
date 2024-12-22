@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 const (
@@ -43,6 +42,13 @@ type WebhookSubscription struct {
 	ApplicationID int    `json:"application_id"`
 	CallbackURL   string `json:"callback_url"`
 	VerifyToken   string `json:"verify_token"`
+}
+
+type StravaClientInterface interface {
+	GetActivity(id int64) (*Activity, error)
+	UpdateActivity(id int64, name string) error
+	GetAuthenticatedAthlete() (*Athlete, error)
+	GetAthleteActivities(page, perPage int, before, after int64) ([]Activity, error)
 }
 
 func NewClient(accessToken, refreshToken, clientID, clientSecret string) *Client {
@@ -229,22 +235,6 @@ func (c *Client) UpdateActivity(activityID int64, name string) error {
 }
 
 func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*WebhookSubscription, error) {
-	// Always delete ALL existing subscriptions first
-	subs, err := c.ListWebhookSubscriptions()
-	if err == nil {
-		for _, sub := range subs {
-			log.Printf("Deleting existing subscription ID: %d (URL: %s)", sub.ID, sub.CallbackURL)
-			err := c.DeleteWebhookSubscription(sub.ID)
-			if err != nil {
-				log.Printf("Warning: failed to delete subscription %d: %v", sub.ID, err)
-			}
-		}
-	}
-
-	// Wait a moment to ensure deletion is processed
-	time.Sleep(time.Second)
-
-	// Now create the new subscription
 	data := url.Values{}
 	data.Set("client_id", c.clientID)
 	data.Set("client_secret", c.clientSecret)
@@ -257,8 +247,7 @@ func (c *Client) CreateWebhookSubscription(callbackURL, verifyToken string) (*We
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}

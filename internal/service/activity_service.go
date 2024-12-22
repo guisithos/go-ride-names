@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/guisithos/go-ride-names/internal/strava"
@@ -44,11 +43,10 @@ var defaultActivityNames = map[string]bool{
 }
 
 type ActivityService struct {
-	client              *strava.Client
-	webhookSubscription *strava.WebhookSubscription
+	client strava.StravaClientInterface
 }
 
-func NewActivityService(client *strava.Client) *ActivityService {
+func NewActivityService(client strava.StravaClientInterface) *ActivityService {
 	return &ActivityService{
 		client: client,
 	}
@@ -123,41 +121,6 @@ func (s *ActivityService) ProcessNewActivity(activityID int64) error {
 		return s.UpdateActivityWithFunName(activity)
 	}
 
-	return nil
-}
-
-func (s *ActivityService) SubscribeToWebhooks(callbackURL, verifyToken string) error {
-	log.Printf("Checking existing webhook subscriptions...")
-
-	// First, list existing subscriptions
-	subscriptions, err := s.client.ListWebhookSubscriptions()
-	if err != nil {
-		log.Printf("Error listing subscriptions: %v", err)
-		return err
-	}
-
-	// Check if we already have a subscription with this callback URL
-	for _, sub := range subscriptions {
-		if sub.CallbackURL == callbackURL {
-			log.Printf("Found existing subscription with ID: %d", sub.ID)
-			s.webhookSubscription = &sub
-			return nil // Success - we're already subscribed
-		}
-	}
-
-	// Only create new subscription if one doesn't exist
-	subscription, err := s.client.CreateWebhookSubscription(callbackURL, verifyToken)
-	if err != nil {
-		// If error is "already exists", treat as success
-		if strings.Contains(err.Error(), "already exists") {
-			log.Printf("Subscription already exists, treating as success")
-			return nil
-		}
-		return fmt.Errorf("failed to create subscription: %v", err)
-	}
-
-	log.Printf("Successfully created new webhook subscription: ID=%d", subscription.ID)
-	s.webhookSubscription = subscription
 	return nil
 }
 
