@@ -19,17 +19,41 @@ const stationaryActivities = [
 
 // Add a mapping for activity type normalization
 const normalizeActivityType = (type, name = '') => {
-    // Convert various weight training activities to a single type
-    if (type === 'Workout' || 
-        type === 'WeightTraining' || 
-        type === 'WeightLifting' || 
-        type === 'Strength' ||
-        name.toLowerCase().includes('weight') ||
-        name.toLowerCase().includes('força') ||
-        name.toLowerCase().includes('musculação')) {
-        return 'WeightTraining';
+    // First try to match by type
+    switch (type) {
+        case 'Run':
+        case 'Ride':
+        case 'Swim':
+        case 'Walk':
+        case 'Workout':
+        case 'WeightTraining':
+        case 'Yoga':
+        case 'Hike':
+        case 'TrailRun':
+        case 'VirtualRide':
+        case 'VirtualRun':
+        case 'Elliptical':
+        case 'StairStepper':
+        case 'Crossfit':
+        case 'Pilates':
+        case 'Skateboard':
+        case 'Surf':
+        case 'Soccer':
+        case 'Squash':
+        case 'MountainBikeRide':
+        case 'Canoeing':
+            return type;
     }
-    return type;
+
+    // Fallback to name-based detection
+    if (name.includes('Run')) return 'Run';
+    if (name.includes('Ride')) return 'Ride';
+    if (name.includes('Swim')) return 'Swim';
+    if (name.includes('Walk')) return 'Walk';
+    if (name.includes('Weight Training')) return 'WeightTraining';
+    if (name.includes('Yoga')) return 'Yoga';
+    
+    return type; // Return original type as fallback
 };
 
 // Format duration in seconds to hours and minutes
